@@ -3,14 +3,14 @@ import hamburgerIcon from "../assets/hamburger.svg";
 
 function TopNav({ onMenuClick }) {
   const [injectionType, setInjectionType] = useState("LICENSE");
-  const [drmOverride, setDrmOverride] = useState("LICENSE");
+  const [drmOverride, setDrmOverride] = useState("DISABLED");
 
   useEffect(() => {
     chrome.storage.local.get(["injection_type", "drm_override"], (result) => {
-      if (result.injection_type) {
+      if (result.injection_type !== undefined) {
         setInjectionType(result.injection_type);
       }
-      if (result.drm_override) {
+      if (result.drm_override !== undefined) {
         setDrmOverride(result.drm_override);
       }
     });
