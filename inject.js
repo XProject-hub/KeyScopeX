@@ -690,8 +690,7 @@ MediaKeySession.prototype.update = function(response) {
     }
 
     // Handle License Data
-    if (!base64Response.startsWith("CAUS") && !firstValidLicenseResponse && (interceptType === 'EME' || interceptType === 'LICENSE')) {
-        firstValidLicenseResponse = true;
+    if (!base64Response.startsWith("CAUS") && (interceptType === 'EME' || interceptType === 'LICENSE')) {
 
         // 🔁 Call parseLicense, then getKeys from global remoteCDM
         if (remoteCDM !== null && remoteCDM.session_id) {
