@@ -67,6 +67,14 @@ chrome.runtime.onInstalled.addListener((details) => {
       }
     });
 
+    chrome.storage.local.set({ drm_override: "DISABLED" }, () => {
+      if (chrome.runtime.lastError) {
+        console.error("Error setting DRM Override type:", chrome.runtime.lastError);
+      } else {
+        console.log("DRM Override type set to DISABLED on first install.");
+      }
+    });
+
     chrome.storage.local.set({ cdrm_instance: null }, () => {
       if (chrome.runtime.lastError) {
         console.error("Error setting CDRM instance:", chrome.runtime.lastError);

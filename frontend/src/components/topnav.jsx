@@ -3,11 +3,15 @@ import hamburgerIcon from "../assets/hamburger.svg";
 
 function TopNav({ onMenuClick }) {
   const [injectionType, setInjectionType] = useState("LICENSE");
+  const [drmOverride, setDrmOverride] = useState("LICENSE");
 
   useEffect(() => {
-    chrome.storage.local.get("injection_type", (result) => {
+    chrome.storage.local.get(["injection_type", "drm_override"], (result) => {
       if (result.injection_type) {
         setInjectionType(result.injection_type);
+      }
+      if (result.drm_override) {
+        setDrmOverride(result.drm_override);
       }
     });
   }, []);
@@ -26,6 +30,17 @@ function TopNav({ onMenuClick }) {
     });
   };
 
+  const handleDrmOverrideChange = (type) => {
+    chrome.storage.local.set({ drm_override: type }, () => {
+      if (chrome.runtime.lastError) {
+        console.error("Error updating drm_override:", chrome.runtime.lastError);
+      } else {
+        setDrmOverride(type);
+        console.log(`DRM Override updated to ${type}`);
+      }
+    });
+  };
+
   return (
     <div className="w-full h-full flex flex-row">
       <img
@@ -34,6 +49,35 @@ function TopNav({ onMenuClick }) {
         className="h-full w-16 p-2 flex items-center cursor-pointer"
         onClick={onMenuClick}
       />
+      <div className="flex flex-row h-full justify-center items-center ml-auto mr-2">
+        <p className="text-white text-lg p-2 mr-2 border-r-2 border-r-white text-nowrap">
+          DRM Override:
+        </p>
+        <button
+          onClick={() => handleDrmOverrideChange("WIDEVINE")}
+          className={`text-white text-lg p-2 rounded-md m-1 cursor-pointer ${
+            drmOverride === "WIDEVINE" ? "bg-green-500/70" : "bg-black"
+          }`}
+        >
+          Widevine
+        </button>
+        <button
+          onClick={() => handleDrmOverrideChange("PLAYREADY")}
+          className={`text-white text-lg p-2 rounded-md m-1 cursor-pointer ${
+            drmOverride === "PLAYREADY" ? "bg-sky-500/70" : "bg-black"
+          }`}
+        >
+          PlayReady
+        </button>
+        <button
+          onClick={() => handleDrmOverrideChange("DISABLED")}
+          className={`text-white text-lg p-2 rounded-md m-1 cursor-pointer ${
+            drmOverride === "DISABLED" ? "bg-red-500/70" : "bg-black"
+          }`}
+        >
+          Disabled
+        </button>
+      </div>
       <div className="flex flex-row h-full justify-center items-center ml-auto mr-2">
         <p className="text-white text-lg p-2 mr-2 border-r-2 border-r-white text-nowrap">
           Injection Type:

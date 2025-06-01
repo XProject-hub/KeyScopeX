@@ -10,6 +10,17 @@ let interceptType = "DISABLED"; // Default to LICENSE, can be changed to 'EME' f
 let originalChallenge = null;
 let widevineDeviceInfo = null;
 let playreadyDeviceInfo = null;
+let drmOveride = "DISABLED"
+
+window.postMessage({ type: "__GET_DRM_OVERRIDE__" }, "*");
+
+window.addEventListener("message", function(event) {
+  if (event.source !== window) return;
+    if (event.data.type === "__DRM_OVERRIDE__") {
+    drmOveride = event.data.drmOverride || "DISABLED";
+    console.log("DRM Override set to:", drmOveride);
+    }
+});
 
 window.postMessage({ type: "__GET_INJECTION_TYPE__" }, "*");
 
@@ -542,7 +553,7 @@ MediaKeySession.prototype.generateRequest = async function(initDataType, initDat
         playReadyPssh = getPlayReadyPssh(initData);
         playReadyAttempted = !!playReadyPssh;
 
-        if (playReadyPssh) {
+        if (playReadyPssh && drmOveride !== "WIDEVINE") {
             console.log("[PlayReady PSSH] Found:", playReadyPssh);
             const drmType = {
                 type: "__DRM_TYPE__",
@@ -579,7 +590,7 @@ MediaKeySession.prototype.generateRequest = async function(initDataType, initDat
         // === Fallback to Widevine ===
         if (!playReadySucceeded) {
             widevinePssh = getWidevinePssh(initData);
-            if (widevinePssh) {
+            if (widevinePssh && drmOveride !== "PLAYREADY") {
                 console.log("[Widevine PSSH] Found:", widevinePssh);
                 const drmType = {
                     type: "__DRM_TYPE__",

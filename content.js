@@ -58,4 +58,19 @@ window.addEventListener("message", function(event) {
         );
       });
     }
+    if (event.data.type === "__GET_DRM_OVERRIDE__") {
+      console.log("Received request for DRM override");
+
+      chrome.storage.local.get("drm_override", (result) => {
+        const drmOverride = result.drm_override || "DISABLED";
+
+        window.postMessage(
+          {
+            type: "__DRM_OVERRIDE__",
+            drmOverride
+          },
+          "*"
+        );
+      });
+    }
 });
