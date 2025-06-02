@@ -36,7 +36,7 @@ function App() {
   return (
     <Router>
       <div className="min-w-full min-h-full w-full h-full flex flex-grow bg-black/95 flex-col relative">
-        <div className="w-full min-h-16 max-h-16 h-16 shrink-0 flex sticky top-0 z-20 border-b border-b-white bg-black">
+        <div className="w-full min-h-16 max-h-16 h-16 shrink-0 flex sticky top-0 z-20 border-b border-b-white bg-black overflow-x-hidden">
           <TopNav onMenuClick={() => setIsSideNavOpen(true)} />
         </div>
 
