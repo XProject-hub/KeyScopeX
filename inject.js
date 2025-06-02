@@ -11,8 +11,6 @@ let originalChallenge = null;
 let widevineDeviceInfo = null;
 let playreadyDeviceInfo = null;
 let drmOveride = "DISABLED"
-let serviceCertificate = null;
-
 
 window.postMessage({ type: "__GET_DRM_OVERRIDE__" }, "*");
 
@@ -628,45 +626,29 @@ MediaKeySession.prototype.generateRequest = async function(initDataType, initDat
 
         // === Intercept License or EME Messages ===
         if (!messageSuppressed && interceptType === 'EME') {
-            let intercepted = false;
+            session.addEventListener("message", function originalMessageInterceptor(event) {
+                event.stopImmediatePropagation();
+                console.log("[Intercepted EME Message] Injecting custom message.");
+                console.log(event.data);
 
-            const messageInterceptor = function(event) {
-                const uint8View = new Uint8Array(event.message);
-                const base64String = btoa(String.fromCharCode(...uint8View));
+                const uint8 = base64ToUint8Array(customBase64);
+                const arrayBuffer = uint8.buffer;
 
-                if (base64String === "CAQ=") {
-                    console.log("[CAQ] Detected - letting original message through.");
-                    return; // Allow original message
-                }
+                const syntheticEvent = new MessageEvent("message", {
+                    data: event.data,
+                    origin: event.origin,
+                    lastEventId: event.lastEventId,
+                    source: event.source,
+                    ports: event.ports
+                });
 
-                if (!intercepted) {
-                    intercepted = true;
-                    event.stopImmediatePropagation();
-                    console.log("[Intercepted EME Message] Injecting custom message.");
+                Object.defineProperty(syntheticEvent, "message", {
+                    get: () => arrayBuffer
+                });
+                console.log(syntheticEvent);
+                setTimeout(() => session.dispatchEvent(syntheticEvent), 0);
+            }, { once: true });
 
-                    const uint8 = base64ToUint8Array(customBase64);
-                    const arrayBuffer = uint8.buffer;
-
-                    const syntheticEvent = new MessageEvent("message", {
-                        data: event.data,
-                        origin: event.origin,
-                        lastEventId: event.lastEventId,
-                        source: event.source,
-                        ports: event.ports
-                    });
-
-                    Object.defineProperty(syntheticEvent, "message", {
-                        get: () => arrayBuffer
-                    });
-
-                    setTimeout(() => session.dispatchEvent(syntheticEvent), 0);
-
-                    // Remove after interception
-                    session.removeEventListener("message", messageInterceptor);
-                }
-            };
-
-            session.addEventListener("message", messageInterceptor);
             messageSuppressed = true;
         }
 
@@ -710,8 +692,6 @@ MediaKeySession.prototype.update = function(response) {
 
     // Handle Service Certificate
     if (base64Response.startsWith("CAUS") && !firstValidServiceCertificate) {
-        console.log("[Service Certificate] Found:", base64Response);
-        serviceCertificate = base64Response;
         const base64ServiceCertificateData = {
             type: "__CERTIFICATE_DATA__",
             data: base64Response
@@ -805,7 +785,6 @@ window.fetch = async function(input, init = {}) {
     if (method === "POST") {
         const url = typeof input === "string" ? input : input.url;
         let body = init.body;
-        
 
         // If the body is FormData, convert it to an object (or JSON)
         if (body instanceof FormData) {
@@ -828,7 +807,6 @@ window.fetch = async function(input, init = {}) {
 
             // Handle body based on its type
             if (typeof body === 'string') {
-                
                 if (isJson(body)) {
                     const parsed = JSON.parse(body);
                     if (jsonContainsValue(parsed, customBase64)) {
@@ -856,7 +834,6 @@ window.fetch = async function(input, init = {}) {
                     sendToBackground({ url, method, headers, body: modifiedBody });
                 }
             }
-            
 
             // Ensure the modified body is used and passed to the original fetch call
             init.body = modifiedBody;
