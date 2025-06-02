@@ -42,7 +42,7 @@ function TopNav({ onMenuClick }) {
   };
 
   return (
-    <div className="w-full h-full flex flex-row">
+    <div className="w-full h-full flex flex-row overflow-x-hidden">
       <img
         src={hamburgerIcon}
         alt="Menu"

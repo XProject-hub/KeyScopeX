@@ -4,24 +4,28 @@
   "version": "2.0",
   "description": "Decrypt DRM Protected content",
   "permissions": [
-    "storage",
-    "tabs",
-    "activeTab",
     "webRequest",
     "webRequestBlocking",
-    "<all_urls>"
+    "<all_urls>",
+    "activeTab",
+    "storage",
+    "tabs",
+    "contextMenus"
   ],
   "background": {
-    "scripts": ["background.js"]
+    "scripts": ["background.js"],
+    "persistent": true
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
-      "run_at": "document_start"
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "web_accessible_resources": ["inject.js"],
+  "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'",
   "browser_action": {
     "default_icon": {
       "16": "icons/icon16.png",
