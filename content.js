@@ -26,7 +26,6 @@ window.addEventListener("message", function(event) {
     }
 
     if (event.data.type === "__GET_CDM_DEVICES__") {
-      console.log("Received request for CDM devices");
 
       chrome.storage.local.get(["widevine_device", "playready_device"], (result) => {
         const widevine_device = result.widevine_device || null;
@@ -44,7 +43,6 @@ window.addEventListener("message", function(event) {
     }
 
     if (event.data.type === "__GET_INJECTION_TYPE__") {
-      console.log("Received request for injection type");
 
       chrome.storage.local.get("injection_type", (result) => {
         const injectionType = result.injection_type || "LICENSE";
@@ -59,7 +57,6 @@ window.addEventListener("message", function(event) {
       });
     }
     if (event.data.type === "__GET_DRM_OVERRIDE__") {
-      console.log("Received request for DRM override");
 
       chrome.storage.local.get("drm_override", (result) => {
         const drmOverride = result.drm_override || "DISABLED";
