@@ -11,6 +11,7 @@ let remoteCDM = null;
 let generateRequestCalled = false;
 let remoteListenerMounted = false;
 let injectionSuccess = false;
+let foundChallengeInBody = false;
 let licenseResponseCounter = 0;
 
 // Post message to content.js to get DRM override
@@ -400,7 +401,7 @@ function arrayBufferToBase64(uint8array) {
   return window.btoa(binary);
 }
 
-// Challenge messahe interceptor
+// Challenge generator interceptor
 const originalGenerateRequest = MediaKeySession.prototype.generateRequest;
 MediaKeySession.prototype.generateRequest = function(initDataType, initData) {
     if (!generateRequestCalled) {
@@ -426,6 +427,7 @@ MediaKeySession.prototype.generateRequest = function(initDataType, initData) {
             window.postMessage({ type: "__PSSH_DATA__", data: wideVinePssh }, "*");
             console.log("[Widevine PSSH found] " + wideVinePssh)
         }
+        // Challenge message interceptor
         if (!remoteListenerMounted) {
             remoteListenerMounted = true;
             session.addEventListener("message", function messageInterceptor(event) {
@@ -484,7 +486,8 @@ MediaKeySession.prototype.generateRequest = function(initDataType, initData) {
             console.log("Message interceptor mounted.");
         }
     return originalGenerateRequest.call(session, initDataType, initData);
-    }}
+    }
+};
 
 
 // Message update interceptors
@@ -497,7 +500,7 @@ MediaKeySession.prototype.update = function(response) {
         remoteCDM.setServiceCertificate(base64Response);
     }
     if (!base64Response.startsWith("CAUS") && pssh) {
-        if (licenseResponseCounter === 1 && interceptType === "EME") {
+        if (licenseResponseCounter === 1 && interceptType === "EME" || interceptType === "EME" && foundChallengeInBody) {
             remoteCDM.parseLicense(base64Response);
             remoteCDM.getKeys();
             remoteCDM.closeSession();
@@ -530,5 +533,51 @@ MediaKeySession.prototype.update = function(response) {
     }
 
     return updatePromise;
-}
+};
 
+// fetch POST interceptor
+(function() {
+  const originalFetch = window.fetch;
+
+  window.fetch = async function(resource, config = {}) {
+    const method = (config.method || 'GET').toUpperCase();
+
+    if (method === 'POST') {
+      console.log('Intercepted POST fetch request:');
+      console.log('URL:', resource);
+      console.log('Options:', config);
+    }
+
+    return originalFetch(resource, config);
+  };
+})();
+
+// XHR POST interceptor
+(function() {
+  const originalOpen = XMLHttpRequest.prototype.open;
+  const originalSend = XMLHttpRequest.prototype.send;
+
+  XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+    this._method = method;
+    this._url = url;
+    return originalOpen.apply(this, arguments);
+  };
+
+  XMLHttpRequest.prototype.send = function(body) {
+    if (this._method && this._method.toUpperCase() === 'POST') {
+        if (body) {
+            if (body instanceof ArrayBuffer) {
+                const buffer = new Uint8Array(body);
+                const base64Body = window.btoa(String.fromCharCode(...buffer));
+                console.log("Converted body " + base64Body);
+                if (base64Body.startsWith("CAES") && base64Body !== remoteCDM.challenge && interceptType === "EME") {
+                    foundChallengeInBody = true;
+                    // Block the request
+                    return;
+                }
+            }
+        }
+    }
+    return originalSend.apply(this, arguments);
+  };
+})();
