@@ -13,9 +13,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const { type, data } = message;
 
   switch (type) {
-    case "INTERCEPTED_POST":
-      console.log("Storing POST Request", data);
-      chrome.storage.local.set({ latestLicenseRequest: data });
+    case "DRM_TYPE":
+      console.log("DRM Type:", data);
+      chrome.storage.local.set({ drmType: data });
       break;
 
     case "PSSH_DATA":
@@ -23,24 +23,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.storage.local.set({ latestPSSH: data });
       break;
 
-    case "LICENSE_DATA":
-      console.log("Storing License Response:", data);
-      chrome.storage.local.set({ latestLicenseResponse: data });
-      break;
-
-    case "CERTIFICATE_DATA":
-      console.log("Storing Service Certificate:", data);
-      chrome.storage.local.set({ latestServiceCertificate: data });
-      break;
-
     case "KEYS_DATA":
       console.log("Storing Decryption Keys:", data);
       chrome.storage.local.set({ latestKeys: data });
-      break;
-
-    case "DRM_TYPE":
-      console.log("DRM Type:", data);
-      chrome.storage.local.set({ drmType: data });
       break;
 
     default:

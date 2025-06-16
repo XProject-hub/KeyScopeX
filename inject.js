@@ -1,7 +1,17 @@
 let widevineDeviceInfo = null;
 let playreadyDeviceInfo = null;
+let originalChallenge = null
+let serviceCertFound = false;
+let drmType = "NONE";
+let psshFound = false;
+let pssh = null;
 let drmOverride = "DISABLED";
 let interceptType = "DISABLED";
+let remoteCDM = null;
+let generateRequestCalled = false;
+let remoteListenerMounted = false;
+let injectionSuccess = false;
+let licenseResponseCounter = 0;
 
 // Post message to content.js to get DRM override
 window.postMessage({ type: "__GET_DRM_OVERRIDE__" }, "*");
@@ -59,16 +69,14 @@ class remotePlayReadyCDM {
     }
 
     // Open PlayReady session
-    async openSession() {
+    openSession() {
         const url = `${this.host}/remotecdm/playready/${this.device_name}/open`;
-        const response =  await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        })
-        const jsonData =  await response.json();
-        if (response.ok && jsonData.data?.session_id) {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send();
+        const jsonData = JSON.parse(xhr.responseText);
+        if (jsonData.data?.session_id) {
             this.session_id = jsonData.data.session_id;
             console.log("PlayReady session opened:", this.session_id);
         } else {
@@ -78,21 +86,18 @@ class remotePlayReadyCDM {
     }
 
     // Get PlayReady challenge
-    async getChallenge(init_data) {
+    getChallenge(init_data) {
         const url = `${this.host}/remotecdm/playready/${this.device_name}/get_license_challenge`;
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
         const body = {
             session_id: this.session_id,
             init_data: init_data
         };
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body)
-        });
-        const jsonData = await response.json();
-        if (response.ok && jsonData.data?.challenge) {
+        xhr.send(JSON.stringify(body));
+        const jsonData = JSON.parse(xhr.responseText);
+        if (jsonData.data?.challenge) {
             this.challenge = btoa(jsonData.data.challenge);
             console.log("PlayReady challenge received:", this.challenge);
         } else {
@@ -102,21 +107,18 @@ class remotePlayReadyCDM {
     }
 
     // Parse PlayReady license response
-    async parseLicense(license_message) {
+    parseLicense(license_message) {
         const url = `${this.host}/remotecdm/playready/${this.device_name}/parse_license`;
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
         const body = {
             session_id: this.session_id,
             license_message: license_message
         }
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body)
-        });
-        const jsonData = await response.json();
-        if (response.ok && jsonData.message === "Successfully parsed and loaded the Keys from the License message")
+        xhr.send(JSON.stringify(body));
+        const jsonData = JSON.parse(xhr.responseText);
+        if (jsonData.message === "Successfully parsed and loaded the Keys from the License message")
         {
             console.log("PlayReady license response parsed successfully");
             return true;
@@ -127,20 +129,17 @@ class remotePlayReadyCDM {
     }
 
     // Get PlayReady keys
-    async getKeys() {
+    getKeys() {
         const url = `${this.host}/remotecdm/playready/${this.device_name}/get_keys`;
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
         const body = {
             session_id: this.session_id
         }
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body)
-        });
-        const jsonData = await response.json()
-        if (response.ok && jsonData.data?.keys) {
+        xhr.send(JSON.stringify(body));
+        const jsonData = JSON.parse(xhr.responseText);
+        if (jsonData.data?.keys) {
             this.keys = jsonData.data.keys;
             console.log("PlayReady keys received:", this.keys);
         } else {
@@ -150,16 +149,14 @@ class remotePlayReadyCDM {
     }
 
     // Close PlayReady session
-    async closeSession () {
+    closeSession () {
         const url = `${this.host}/remotecdm/playready/${this.device_name}/close/${this.session_id}`;
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-        const jsonData = await response.json();
-        if (response.ok) {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send();
+        const jsonData = JSON.parse(xhr.responseText);
+        if (jsonData) {
             console.log("PlayReady session closed successfully");
         } else {
             console.error("Failed to close PlayReady session:", jsonData.message);
@@ -183,7 +180,7 @@ class remoteWidevineCDM {
         }
 
     // Open Widevine session
-    async openSession () {
+    openSession () {
         const url = `${this.host}/remotecdm/widevine/${this.device_name}/open`;
         const xhr = new XMLHttpRequest();
         xhr.open('GET', url, false);
@@ -200,21 +197,18 @@ class remoteWidevineCDM {
     }
 
     // Set Widevine service certificate
-    async setServiceCertificate(certificate) {
+    setServiceCertificate(certificate) {
         const url = `${this.host}/remotecdm/widevine/${this.device_name}/set_service_certificate`;
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
         const body = {
             session_id: this.session_id,
             certificate: certificate ?? null
         }
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body)
-        });
-        const jsonData = await response.json();
-        if (response.ok && jsonData.status === 200) {
+        xhr.send(JSON.stringify(body));
+        const jsonData = JSON.parse(xhr.responseText);
+        if (jsonData.status === 200) {
             console.log("Service certificate set successfully");
         } else {
             console.error("Failed to set service certificate:", jsonData.message);
@@ -223,22 +217,19 @@ class remoteWidevineCDM {
     }
 
     // Get Widevine challenge
-    async getChallenge(init_data, license_type = 'STREAMING') {
+    getChallenge(init_data, license_type = 'STREAMING') {
         const url = `${this.host}/remotecdm/widevine/${this.device_name}/get_license_challenge/${license_type}`;
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
         const body = {
             session_id: this.session_id,
             init_data: init_data,
             privacy_mode: serviceCertFound
         };
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body)
-        });
-        const jsonData = await response.json();
-        if (response.ok && jsonData.data?.challenge_b64) {
+        xhr.send(JSON.stringify(body));
+        const jsonData = JSON.parse(xhr.responseText);
+        if (jsonData.data?.challenge_b64) {
             this.challenge = jsonData.data.challenge_b64;
             console.log("Widevine challenge received:", this.challenge);
         } else {
@@ -248,21 +239,18 @@ class remoteWidevineCDM {
     }
 
     // Parse Widevine license response
-    async parseLicense(license_message) {
+    parseLicense(license_message) {
         const url =  `${this.host}/remotecdm/widevine/${this.device_name}/parse_license`;
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
         const body = {
             session_id: this.session_id,
             license_message: license_message
         };
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body)
-        });
-        const jsonData = await response.json();
-        if (response.ok && jsonData.status === 200) {
+        xhr.send(JSON.stringify(body));
+        const jsonData = JSON.parse(xhr.responseText);
+        if (jsonData.status === 200) {
             console.log("Widevine license response parsed successfully");
             return true;
         } else {
@@ -272,20 +260,17 @@ class remoteWidevineCDM {
     }
 
     // Get Widevine keys
-    async getKeys() {
+    getKeys() {
         const url = `${this.host}/remotecdm/widevine/${this.device_name}/get_keys/ALL`;
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
         const body = {
             session_id: this.session_id
         };
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body)
-        });
-        const jsonData = await response.json();
-        if (response.ok && jsonData.data?.keys) {
+        xhr.send(JSON.stringify(body));
+        const jsonData = JSON.parse(xhr.responseText);
+        if (jsonData.data?.keys) {
             this.keys = jsonData.data.keys;
             console.log("Widevine keys received:", this.keys);
         } else {
@@ -295,16 +280,14 @@ class remoteWidevineCDM {
     }
 
     // Close Widevine session
-    async closeSession() {
+    closeSession() {
         const url = `${this.host}/remotecdm/widevine/${this.device_name}/close/${this.session_id}`;
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-        const jsonData = await response.json();
-        if (response.ok) {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, false);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send();
+        const jsonData = JSON.parse(xhr.responseText);
+        if (jsonData) {
             console.log("Widevine session closed successfully");
         } else {
             console.error("Failed to close Widevine session:", jsonData.message);
@@ -416,3 +399,136 @@ function arrayBufferToBase64(uint8array) {
 
   return window.btoa(binary);
 }
+
+// Challenge messahe interceptor
+const originalGenerateRequest = MediaKeySession.prototype.generateRequest;
+MediaKeySession.prototype.generateRequest = function(initDataType, initData) {
+    if (!generateRequestCalled) {
+        generateRequestCalled = true;
+        const session = this;
+        let playReadyPssh = getPlayReadyPssh(initData);
+        if (playReadyPssh && drmOverride !== "WIDEVINE") {
+            // PlayReady Code
+            drmType = "PlayReady";
+            window.postMessage({ type: "__DRM_TYPE__", data: "PlayReady" }, "*");
+            console.log("[DRM Detected] PlayReady");
+            pssh = playReadyPssh;
+            window.postMessage({ type: "__PSSH_DATA__", data: playReadyPssh }, "*");
+            console.log("[PlayReady PSSH found] " + playReadyPssh)
+        }
+        let wideVinePssh = getWidevinePssh(initData)
+        if (wideVinePssh && !playReadyPssh && drmOverride !== "PLAYREADY") {
+            // Widevine code
+            drmType = "Widevine";
+            window.postMessage({ type: "__DRM_TYPE__", data: "Widevine" }, "*");
+            console.log("[DRM Detected] Widevine");
+            pssh = wideVinePssh;
+            window.postMessage({ type: "__PSSH_DATA__", data: wideVinePssh }, "*");
+            console.log("[Widevine PSSH found] " + wideVinePssh)
+        }
+        if (!remoteListenerMounted) {
+            remoteListenerMounted = true;
+            session.addEventListener("message", function messageInterceptor(event) {
+                event.stopImmediatePropagation();
+                const uint8Array = new Uint8Array(event.message);
+                const base64challenge = arrayBufferToBase64(uint8Array);
+                if (base64challenge === "CAQ=" && interceptType !== "DISABLED" && drmOverride !== "PLAYREADY") {
+                    const {
+                        device_type, system_id, security_level, host, secret, device_name
+                    } = widevineDeviceInfo;
+                    remoteCDM = new remoteWidevineCDM(device_type, system_id, security_level, host, secret, device_name);
+                    remoteCDM.openSession();
+                }
+                if (!injectionSuccess && base64challenge !== "CAQ=" && interceptType !== "DISABLED") {
+                    if (interceptType === "EME") {
+                        injectionSuccess = true;
+                    }
+                    if (!originalChallenge) {
+                        originalChallenge = base64challenge;
+                    }
+                    if (!remoteCDM && drmType === "Widevine" && drmOverride !== "PLAYREADY") {
+                        const {
+                            device_type, system_id, security_level, host, secret, device_name
+                        } = widevineDeviceInfo;
+                        remoteCDM = new remoteWidevineCDM(device_type, system_id, security_level, host, secret, device_name);
+                        remoteCDM.openSession();
+                    }
+                    if (!remoteCDM && drmType === "PlayReady" && drmOverride !== "WIDEVINE") {
+                        const {
+                            security_level, host, secret, device_name
+                        } = playreadyDeviceInfo;
+                        remoteCDM = new remotePlayReadyCDM(security_level, host, secret, device_name)
+                        remoteCDM.openSession();
+                    }
+                    if (remoteCDM) {
+                        remoteCDM.getChallenge(pssh);
+                    }
+                    if (interceptType === "EME" && remoteCDM) {
+                        const uint8challenge = base64ToUint8Array(remoteCDM.challenge);
+                        const challengeBuffer = uint8challenge.buffer;
+                        const syntheticEvent = new MessageEvent("message", {
+                            data: event.data,
+                            origin: event.origin,
+                            lastEventId: event.lastEventId,
+                            source: event.source,
+                            ports: event.ports
+                        });
+                        Object.defineProperty(syntheticEvent, "message", {
+                            get: () => challengeBuffer
+                        });
+                        console.log("Intercepted EME Challenge and injected custom one.")
+                        session.dispatchEvent(syntheticEvent);
+                    }
+                }
+            })
+            console.log("Message interceptor mounted.");
+        }
+    return originalGenerateRequest.call(session, initDataType, initData);
+    }}
+
+
+// Message update interceptors
+const originalUpdate = MediaKeySession.prototype.update;
+MediaKeySession.prototype.update = function(response) {
+    const uint8 = response instanceof Uint8Array ? response : new Uint8Array(response);
+    const base64Response = window.btoa(String.fromCharCode(...uint8));
+    console.log(base64Response);
+    if (base64Response.startsWith("CAUS") && pssh && remoteCDM) {
+        remoteCDM.setServiceCertificate(base64Response);
+    }
+    if (!base64Response.startsWith("CAUS") && pssh) {
+        if (licenseResponseCounter === 1 && interceptType === "EME") {
+            remoteCDM.parseLicense(base64Response);
+            remoteCDM.getKeys();
+            remoteCDM.closeSession();
+            window.postMessage({ type: "__KEYS_DATA__", data: remoteCDM.keys }, "*");
+        }
+        licenseResponseCounter++;
+    }
+    const updatePromise = originalUpdate.call(this, response);
+    if (!pssh) {
+        updatePromise
+            .then(() => {
+                let clearKeys = getClearkey(response);
+                if (clearKeys && clearKeys.length > 0) {
+                  console.log("[CLEARKEY] ", clearKeys);
+                  const drmType = {
+                      type: "__DRM_TYPE__",
+                      data: 'ClearKey'
+                  };
+                  window.postMessage(drmType, "*");
+                  const keysData = {
+                      type: "__KEYS_DATA__",
+                      data: clearKeys
+                  };
+                  window.postMessage(keysData, "*");
+                }
+            })
+            .catch(e => {
+                console.log("[CLEARKEY] Not found");
+            });
+    }
+
+    return updatePromise;
+}
+

@@ -18,7 +18,7 @@
 window.addEventListener("message", function(event) {
     if (event.source !== window) return;
 
-    if (["__INTERCEPTED_POST__", "__PSSH_DATA__", "__LICENSE_DATA__", "__CERTIFICATE_DATA__", "__KEYS_DATA__", "__DRM_TYPE__"].includes(event.data?.type)) {
+    if (["__DRM_TYPE__", "__PSSH_DATA__", "__KEYS_DATA__"].includes(event.data?.type)) {
         chrome.runtime.sendMessage({
             type: event.data.type.replace("__", "").replace("__", ""),
             data: event.data.data
