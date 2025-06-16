@@ -462,7 +462,7 @@ MediaKeySession.prototype.generateRequest = function(initDataType, initData) {
                         remoteCDM = new remotePlayReadyCDM(security_level, host, secret, device_name)
                         remoteCDM.openSession();
                     }
-                    if (remoteCDM) {
+                    if (remoteCDM && interceptType === "EME") {
                         remoteCDM.getChallenge(pssh);
                     }
                     if (interceptType === "EME" && remoteCDM) {
@@ -500,7 +500,7 @@ MediaKeySession.prototype.update = function(response) {
         remoteCDM.setServiceCertificate(base64Response);
     }
     if (!base64Response.startsWith("CAUS") && pssh) {
-        if (licenseResponseCounter === 1 && interceptType === "EME" || interceptType === "EME" && foundChallengeInBody) {
+        if (licenseResponseCounter === 1 || foundChallengeInBody) {
             remoteCDM.parseLicense(base64Response);
             remoteCDM.getKeys();
             remoteCDM.closeSession();
@@ -509,7 +509,7 @@ MediaKeySession.prototype.update = function(response) {
         licenseResponseCounter++;
     }
     const updatePromise = originalUpdate.call(this, response);
-    if (!pssh) {
+    if (!pssh && interceptType !== "DISABLED") {
         updatePromise
             .then(() => {
                 let clearKeys = getClearkey(response);
@@ -566,14 +566,19 @@ MediaKeySession.prototype.update = function(response) {
   XMLHttpRequest.prototype.send = function(body) {
     if (this._method && this._method.toUpperCase() === 'POST') {
         if (body) {
-            if (body instanceof ArrayBuffer) {
-                const buffer = new Uint8Array(body);
+            if (body instanceof ArrayBuffer || body instanceof Uint8Array) {
+                const buffer = body instanceof Uint8Array ? body : new Uint8Array(body);
                 const base64Body = window.btoa(String.fromCharCode(...buffer));
-                console.log("Converted body " + base64Body);
                 if (base64Body.startsWith("CAES") && base64Body !== remoteCDM.challenge && interceptType === "EME") {
                     foundChallengeInBody = true;
                     // Block the request
                     return;
+                }
+                if (base64Body.startsWith("CAES") && interceptType == "LICENSE") {
+                    foundChallengeInBody = true;
+                    remoteCDM.getChallenge(pssh)
+                    const injectedBody = base64ToUint8Array(remoteCDM.challenge);
+                    return originalSend.call(this, injectedBody);
                 }
             }
         }
