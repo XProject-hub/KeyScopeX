@@ -27,6 +27,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log("Storing Decryption Keys:", data);
       chrome.storage.local.set({ latestKeys: data });
       break;
+    
+    case "LICENSE_URL":
+      console.log("Storling License URL " + data);
+      chrome.storage.local.set({licenseURL: data});
+      break;
 
     default:
       console.warn("Unknown message type received:", type);

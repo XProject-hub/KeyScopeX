@@ -307,11 +307,11 @@ const u8ToHexStr = bytes =>
 const b64ToHexStr = b64 =>
     [...atob(b64)].map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join``;
 
-function jsonContainsValue(obj, target) {
-    if (typeof obj === "string") return obj === target;
-    if (Array.isArray(obj)) return obj.some(val => jsonContainsValue(val, target));
+function jsonContainsValue(obj, prefix = "CAES") {
+    if (typeof obj === "string") return obj.startsWith(prefix);
+    if (Array.isArray(obj)) return obj.some(val => jsonContainsValue(val, prefix));
     if (typeof obj === "object" && obj !== null) {
-        return Object.values(obj).some(val => jsonContainsValue(val, target));
+        return Object.values(obj).some(val => jsonContainsValue(val, prefix));
     }
     return false;
 }
@@ -418,7 +418,7 @@ MediaKeySession.prototype.generateRequest = function(initDataType, initData) {
             console.log("[PlayReady PSSH found] " + playReadyPssh)
         }
         let wideVinePssh = getWidevinePssh(initData)
-        if (wideVinePssh && !playReadyPssh && drmOverride !== "PLAYREADY") {
+        if (wideVinePssh && drmOverride !== "PLAYREADY") {
             // Widevine code
             drmType = "Widevine";
             window.postMessage({ type: "__DRM_TYPE__", data: "Widevine" }, "*");
@@ -489,7 +489,6 @@ MediaKeySession.prototype.generateRequest = function(initDataType, initData) {
     }
 };
 
-
 // Message update interceptors
 const originalUpdate = MediaKeySession.prototype.update;
 MediaKeySession.prototype.update = function(response) {
@@ -509,7 +508,7 @@ MediaKeySession.prototype.update = function(response) {
         licenseResponseCounter++;
     }
     const updatePromise = originalUpdate.call(this, response);
-    if (!pssh && interceptType !== "DISABLED") {
+    if (!pssh && (drmOverride !== "WIDEVINE" && drmOverride !== "PLAYREADY")) {
         updatePromise
             .then(() => {
                 let clearKeys = getClearkey(response);
@@ -543,9 +542,17 @@ MediaKeySession.prototype.update = function(response) {
     const method = (config.method || 'GET').toUpperCase();
 
     if (method === 'POST') {
-      console.log('Intercepted POST fetch request:');
-      console.log('URL:', resource);
-      console.log('Options:', config);
+        if (config.body) {
+            if (config.body instanceof ArrayBuffer || body instanceof Uint8Array) {
+              const buffer = body instanceof Uint8Array ? body : new Uint8Array(body);
+              const base64Body = window.btoa(String.fromCharCode(...buffer));
+              if (base64Body.startsWith("CAES") && base64Body !== remoteCDM.challenge && interceptType === "EME") {
+                foundChallengeInBody = true;
+                window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
+                return;
+              }
+            }
+        }
     }
 
     return originalFetch(resource, config);
@@ -571,14 +578,23 @@ MediaKeySession.prototype.update = function(response) {
                 const base64Body = window.btoa(String.fromCharCode(...buffer));
                 if (base64Body.startsWith("CAES") && base64Body !== remoteCDM.challenge && interceptType === "EME") {
                     foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
                     // Block the request
                     return;
                 }
                 if (base64Body.startsWith("CAES") && interceptType == "LICENSE") {
                     foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
                     remoteCDM.getChallenge(pssh)
                     const injectedBody = base64ToUint8Array(remoteCDM.challenge);
                     return originalSend.call(this, injectedBody);
+                }
+            }
+            if (isJson(body)) {
+                if (jsonContainsValue(body) && !jsonContainsValue(body, remoteCDM.challenge)) {
+                    foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
+                    return;
                 }
             }
         }
