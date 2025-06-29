@@ -15,6 +15,7 @@ let remoteListenerMounted = false;
 let injectionSuccess = false;
 let foundChallengeInBody = false;
 let licenseResponseCounter = 0;
+let keysRetrieved = false;
 
 // Post message to content.js to get DRM override
 window.postMessage({ type: "__GET_DRM_OVERRIDE__" }, "*");
@@ -321,20 +322,20 @@ function jsonContainsValue(obj, prefix = "CAES") {
     return false;
 }
 
-function jsonReplaceValue(obj, target, newValue) {
+function jsonReplaceValue(obj, newValue) {
     if (typeof obj === "string") {
-        return obj === target ? newValue : obj;
+        return obj.startsWith("CAES") || obj.startsWith("PD94") ? newValue : obj;
     }
 
     if (Array.isArray(obj)) {
-        return obj.map(item => jsonReplaceValue(item, target, newValue));
+        return obj.map(item => jsonReplaceValue(item, newValue));
     }
 
     if (typeof obj === "object" && obj !== null) {
         const newObj = {};
         for (const key in obj) {
             if (Object.hasOwn(obj, key)) {
-                newObj[key] = jsonReplaceValue(obj[key], target, newValue);
+                newObj[key] = jsonReplaceValue(obj[key], newValue);
             }
         }
         return newObj;
@@ -430,7 +431,7 @@ MediaKeySession.prototype.generateRequest = function(initDataType, initData) {
             event.stopImmediatePropagation();
             const uint8Array = new Uint8Array(event.message);
             const base64challenge = arrayBufferToBase64(uint8Array);
-            if (base64challenge === "CAQ=" && interceptType !== "DISABLED") {
+            if (base64challenge === "CAQ=" && interceptType !== "DISABLED" && !serviceCertFound) {
                 const {
                     device_type, system_id, security_level, host, secret, device_name
                 } = widevineDeviceInfo;
@@ -501,19 +502,21 @@ const originalUpdate = MediaKeySession.prototype.update;
 MediaKeySession.prototype.update = function(response) {
     const uint8 = response instanceof Uint8Array ? response : new Uint8Array(response);
     const base64Response = window.btoa(String.fromCharCode(...uint8));
-    if (base64Response.startsWith("CAUS") && foundWidevinePssh && remoteCDM) {
+    if (base64Response.startsWith("CAUS") && foundWidevinePssh && remoteCDM && !serviceCertFound) {
         remoteCDM.setServiceCertificate(base64Response);
-        if (interceptType === "EME") {
+        if (interceptType === "EME" && !remoteCDM.challenge) {
             remoteCDM.getChallenge(foundWidevinePssh);
         }
         window.postMessage({ type: "__DRM_TYPE__", data: "Widevine" }, "*");
         window.postMessage({ type: "__PSSH_DATA__", data: foundWidevinePssh }, "*");
+        serviceCertFound = true;
     }
-    if (!base64Response.startsWith("CAUS") && (foundWidevinePssh || foundPlayreadyPssh)) {
+    if (!base64Response.startsWith("CAUS") && (foundWidevinePssh || foundPlayreadyPssh) && !keysRetrieved) {
         if (licenseResponseCounter === 1 || foundChallengeInBody) {
             remoteCDM.parseLicense(base64Response);
             remoteCDM.getKeys();
             remoteCDM.closeSession();
+            keysRetrieved = true;
             window.postMessage({ type: "__KEYS_DATA__", data: remoteCDM.keys }, "*");
         }
         licenseResponseCounter++;
@@ -553,15 +556,120 @@ MediaKeySession.prototype.update = function(response) {
     const method = (config.method || 'GET').toUpperCase();
 
     if (method === 'POST') {
-        if (config.body) {
-            if (config.body instanceof ArrayBuffer || body instanceof Uint8Array) {
-              const buffer = body instanceof Uint8Array ? body : new Uint8Array(body);
-              const base64Body = window.btoa(String.fromCharCode(...buffer));
-              if (base64Body.startsWith("CAES") && base64Body !== remoteCDM.challenge && interceptType === "EME") {
-                foundChallengeInBody = true;
-                window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
-                return;
-              }
+        let body = config.body;
+        if (body) {
+            if (body instanceof ArrayBuffer || body instanceof Uint8Array) {
+                const buffer = body instanceof Uint8Array ? body : new Uint8Array(body);
+                const base64Body = window.btoa(String.fromCharCode(...buffer));
+                if ((base64Body.startsWith("CAES") || base64Body.startsWith("PD94")) && (!remoteCDM || remoteCDM.challenge === null || base64Body !== remoteCDM.challenge) && interceptType === "EME") {
+                    foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
+                    // Block the request
+                    return;
+                }
+                if ((base64Body.startsWith("CAES") || base64Body.startsWith("PD94")) && interceptType == "LICENSE" &&!foundChallengeInBody) {
+                    foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
+                    if (!remoteCDM) {
+                        if (base64Body.startsWith("CAES")) {
+                            const {
+                                device_type, system_id, security_level, host, secret, device_name
+                            } = widevineDeviceInfo;
+                            remoteCDM = new remoteWidevineCDM(device_type, system_id, security_level, host, secret, device_name);
+                            remoteCDM.openSession();
+                            remoteCDM.getChallenge(foundWidevinePssh);
+                        }
+                        if (base64Body.startsWith("PD94")) {
+                            const {
+                                security_level, host, secret, device_name
+                            } = playreadyDeviceInfo;
+                            remoteCDM = new remotePlayReadyCDM(security_level, host, secret, device_name);
+                            remoteCDM.openSession();
+                            remoteCDM.getChallenge(foundPlayreadyPssh);
+                        }
+                    }
+                    if (remoteCDM && remoteCDM.challenge === null) {
+                        remoteCDM.getChallenge(foundWidevinePssh);
+                    }
+                    const injectedBody = base64ToUint8Array(remoteCDM.challenge);
+                    config.body = injectedBody;
+                    return originalFetch(resource, config);
+                }
+            }
+            if (typeof body === 'string' && !isJson(body)) {
+                const base64EncodedBody = btoa(body);
+                if ((base64EncodedBody.startsWith("CAES") || base64EncodedBody.startsWith("PD94")) && (!remoteCDM || remoteCDM.challenge === null || base64EncodedBody !== remoteCDM.challenge) && interceptType === "EME") {
+                    foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
+                    // Block the request
+                    return;
+                }
+                if ((base64EncodedBody.startsWith("CAES") || base64EncodedBody.startsWith("PD94")) && interceptType == "LICENSE" && !foundChallengeInBody) {
+                    foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
+                    if (!remoteCDM) {
+                        if (base64EncodedBody.startsWith("CAES")) {
+                            const {
+                                device_type, system_id, security_level, host, secret, device_name
+                            } = widevineDeviceInfo;
+                            remoteCDM = new remoteWidevineCDM(device_type, system_id, security_level, host, secret, device_name);
+                            remoteCDM.openSession();
+                            remoteCDM.getChallenge(foundWidevinePssh);
+                        }
+                        if (base64EncodedBody.startsWith("PD94")) {
+                            const {
+                                security_level, host, secret, device_name
+                            } = playreadyDeviceInfo;
+                            remoteCDM = new remotePlayReadyCDM(security_level, host, secret, device_name);
+                            remoteCDM.openSession();
+                            remoteCDM.getChallenge(foundPlayreadyPssh);
+                        }
+                    }
+                    if (remoteCDM && remoteCDM.challenge === null) {
+                        remoteCDM.getChallenge(foundWidevinePssh);
+                    }
+                    const injectedBody = atob(remoteCDM.challenge);
+                    config.body = injectedBody;
+                    return originalFetch(resource, config);
+                }
+            }
+            if (typeof body === 'string' && isJson(body)) {
+                const jsonBody = JSON.parse(body);
+
+                if ((jsonContainsValue(jsonBody, "CAES") || jsonContainsValue(jsonBody, "PD94")) && (!remoteCDM || remoteCDM.challenge === null) && interceptType === "EME") {
+                    foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
+                    // Block the request
+                    return;
+                }
+
+                if ((jsonContainsValue(jsonBody, "CAES") || jsonContainsValue(jsonBody, "PD94")) && interceptType === "LICENSE" && !foundChallengeInBody) {
+                    foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
+                    if (!remoteCDM) {
+                        if (jsonContainsValue(jsonBody, "CAES")) {
+                            const {
+                                device_type, system_id, security_level, host, secret, device_name
+                            } = widevineDeviceInfo;
+                            remoteCDM = new remoteWidevineCDM(device_type, system_id, security_level, host, secret, device_name);
+                            remoteCDM.openSession();
+                            remoteCDM.getChallenge(foundWidevinePssh);
+                        }
+                        if (jsonContainsValue(jsonBody, "PD94")) {
+                            const {
+                                security_level, host, secret, device_name
+                            } = playreadyDeviceInfo;
+                            remoteCDM = new remotePlayReadyCDM(security_level, host, secret, device_name);
+                            remoteCDM.openSession();
+                            remoteCDM.getChallenge(foundPlayreadyPssh);
+                        }
+                    }
+                    if (remoteCDM && remoteCDM.challenge === null) {
+                        remoteCDM.getChallenge(foundWidevinePssh);
+                    }
+                    const injectedBody = jsonReplaceValue(jsonBody, remoteCDM.challenge);
+                    config.body = JSON.stringify(injectedBody);
+                }
             }
         }
     }
@@ -594,7 +702,7 @@ MediaKeySession.prototype.update = function(response) {
                     // Block the request
                     return;
                 }
-                if ((base64Body.startsWith("CAES") || base64Body.startsWith("PD94")) && interceptType == "LICENSE") {
+                if ((base64Body.startsWith("CAES") || base64Body.startsWith("PD94")) && interceptType == "LICENSE" &&!foundChallengeInBody) {
                     foundChallengeInBody = true;
                     window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
                     if (!remoteCDM) {
@@ -615,7 +723,7 @@ MediaKeySession.prototype.update = function(response) {
                             remoteCDM.getChallenge(foundPlayreadyPssh);
                         }
                     }
-                    if (remoteCDM) {
+                    if (remoteCDM && remoteCDM.challenge === null) {
                         remoteCDM.getChallenge(foundWidevinePssh);
                     }
                     const injectedBody = base64ToUint8Array(remoteCDM.challenge);
@@ -631,7 +739,7 @@ MediaKeySession.prototype.update = function(response) {
                     // Block the request
                     return;
                 }
-                if ((base64EncodedBody.startsWith("CAES") || base64EncodedBody.startsWith("PD94")) && interceptType == "LICENSE") {
+                if ((base64EncodedBody.startsWith("CAES") || base64EncodedBody.startsWith("PD94")) && interceptType == "LICENSE" && !foundChallengeInBody) {
                     foundChallengeInBody = true;
                     window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
                     if (!remoteCDM) {
@@ -652,8 +760,50 @@ MediaKeySession.prototype.update = function(response) {
                             remoteCDM.getChallenge(foundPlayreadyPssh);
                         }
                     }
+                    if (remoteCDM && remoteCDM.challenge === null) {
+                        remoteCDM.getChallenge(foundWidevinePssh);
+                    }
                     const injectedBody = atob(remoteCDM.challenge);
                     return originalSend.call(this, injectedBody);
+                }
+            }
+
+            if (typeof body === 'string' && isJson(body)) {
+                const jsonBody = JSON.parse(body);
+
+                if ((jsonContainsValue(jsonBody, "CAES") || jsonContainsValue(jsonBody, "PD94")) && (!remoteCDM || remoteCDM.challenge === null) && interceptType === "EME") {
+                    foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
+                    // Block the request
+                    return;
+                }
+
+                if ((jsonContainsValue(jsonBody, "CAES") || jsonContainsValue(jsonBody, "PD94")) && interceptType === "LICENSE" && !foundChallengeInBody) {
+                    foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
+                    if (!remoteCDM) {
+                        if (jsonContainsValue(jsonBody, "CAES")) {
+                            const {
+                                device_type, system_id, security_level, host, secret, device_name
+                            } = widevineDeviceInfo;
+                            remoteCDM = new remoteWidevineCDM(device_type, system_id, security_level, host, secret, device_name);
+                            remoteCDM.openSession();
+                            remoteCDM.getChallenge(foundWidevinePssh);
+                        }
+                        if (jsonContainsValue(jsonBody, "PD94")) {
+                            const {
+                                security_level, host, secret, device_name
+                            } = playreadyDeviceInfo;
+                            remoteCDM = new remotePlayReadyCDM(security_level, host, secret, device_name);
+                            remoteCDM.openSession();
+                            remoteCDM.getChallenge(foundPlayreadyPssh);
+                        }
+                    }
+                    if (remoteCDM && remoteCDM.challenge === null) {
+                        remoteCDM.getChallenge(foundWidevinePssh);
+                    }
+                    const injectedBody = jsonReplaceValue(jsonBody, remoteCDM.challenge);
+                    return originalSend.call(this, JSON.stringify(injectedBody));
                 }
             }
         }
