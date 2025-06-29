@@ -51,35 +51,6 @@ function TopNav({ onMenuClick }) {
       />
       <div className="flex flex-row h-full justify-center items-center ml-auto mr-2">
         <p className="text-white text-lg p-2 mr-2 border-r-2 border-r-white text-nowrap">
-          DRM Override:
-        </p>
-        <button
-          onClick={() => handleDrmOverrideChange("WIDEVINE")}
-          className={`text-white text-lg p-2 rounded-md m-1 cursor-pointer ${
-            drmOverride === "WIDEVINE" ? "bg-green-500/70" : "bg-black"
-          }`}
-        >
-          Widevine
-        </button>
-        <button
-          onClick={() => handleDrmOverrideChange("PLAYREADY")}
-          className={`text-white text-lg p-2 rounded-md m-1 cursor-pointer ${
-            drmOverride === "PLAYREADY" ? "bg-sky-500/70" : "bg-black"
-          }`}
-        >
-          PlayReady
-        </button>
-        <button
-          onClick={() => handleDrmOverrideChange("DISABLED")}
-          className={`text-white text-lg p-2 rounded-md m-1 cursor-pointer ${
-            drmOverride === "DISABLED" ? "bg-red-500/70" : "bg-black"
-          }`}
-        >
-          Disabled
-        </button>
-      </div>
-      <div className="flex flex-row h-full justify-center items-center ml-auto mr-2">
-        <p className="text-white text-lg p-2 mr-2 border-r-2 border-r-white text-nowrap">
           Injection Type:
         </p>
         <button

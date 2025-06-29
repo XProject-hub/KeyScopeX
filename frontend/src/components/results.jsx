@@ -4,16 +4,21 @@ function Results() {
   const [drmType, setDrmType] = useState("");
   const [pssh, setPssh] = useState("");
   const [licenseUrl, setLicenseUrl] = useState("");
-  const [keys, setKeys] = useState("");
+  const [keys, setKeys] = useState([]);
 
   useEffect(() => {
     chrome.storage.local.get(
-      ["drmType", "latestPSSH", "latestLicenseRequest", "latestKeys"],
+      [
+        "drmType",
+        "latestPSSH",
+        "latestLicenseRequest",
+        "latestKeys",
+        "licenseURL",
+      ],
       (result) => {
         if (result.drmType) setDrmType(result.drmType);
         if (result.latestPSSH) setPssh(result.latestPSSH);
-        if (result.latestLicenseRequest?.url)
-          setLicenseUrl(result.latestLicenseRequest.url);
+        if (result.licenseURL) setLicenseUrl(result.licenseURL);
         if (result.latestKeys) {
           try {
             const parsed = Array.isArray(result.latestKeys)
@@ -36,8 +41,8 @@ function Results() {
         if (changes.latestPSSH) {
           setPssh(changes.latestPSSH.newValue);
         }
-        if (changes.latestLicenseRequest) {
-          setLicenseUrl(changes.latestLicenseRequest.newValue.url);
+        if (changes.licenseURL) {
+          setLicenseUrl(changes.licenseURL.newValue);
         }
         if (changes.latestKeys) {
           setKeys(changes.latestKeys.newValue);
@@ -54,7 +59,7 @@ function Results() {
     chrome.storage.local.set({
       drmType: "None",
       latestPSSH: "None",
-      latestLicenseRequest: { url: "None" },
+      licenseURL: "None",
       latestKeys: [],
     });
 
