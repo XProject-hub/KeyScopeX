@@ -1,0 +1,21 @@
+{
+    "name": "cdrm-extension",
+    "version": "1.0.0",
+    "description": "",
+    "main": "background.js",
+    "scripts": {
+        "buildext": "node buildext.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://cdm-project.com/tpd94/CDRM-Extension.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "module",
+    "engines": {
+        "node": ">=21.0.0"
+    }
+}
