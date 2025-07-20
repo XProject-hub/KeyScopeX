@@ -5,14 +5,23 @@ function Results() {
     const [pssh, setPssh] = useState("");
     const [licenseUrl, setLicenseUrl] = useState("");
     const [keys, setKeys] = useState([]);
+    const [manifestUrl, setManifestUrl] = useState("");
 
     useEffect(() => {
         chrome.storage.local.get(
-            ["drmType", "latestPSSH", "latestLicenseRequest", "latestKeys", "licenseURL"],
+            [
+                "drmType",
+                "latestPSSH",
+                "latestLicenseRequest",
+                "latestKeys",
+                "licenseURL",
+                "manifestURL",
+            ],
             (result) => {
                 if (result.drmType) setDrmType(result.drmType);
                 if (result.latestPSSH) setPssh(result.latestPSSH);
                 if (result.licenseURL) setLicenseUrl(result.licenseURL);
+                if (result.manifestURL) setManifestUrl(result.manifestURL);
                 if (result.latestKeys) {
                     try {
                         const parsed = Array.isArray(result.latestKeys)
@@ -38,6 +47,9 @@ function Results() {
                 if (changes.licenseURL) {
                     setLicenseUrl(changes.licenseURL.newValue);
                 }
+                if (changes.manifestURL) {
+                    setManifestUrl(changes.manifestURL.newValue);
+                }
                 if (changes.latestKeys) {
                     setKeys(changes.latestKeys.newValue);
                 }
@@ -54,6 +66,7 @@ function Results() {
             drmType: "None",
             latestPSSH: "None",
             licenseURL: "None",
+            manifestURL: "None",
             latestKeys: [],
         });
 
@@ -97,39 +110,52 @@ function Results() {
             >
                 Capture current tab
             </button>
+
             <p className="text-2xl mt-5">DRM Type</p>
             <input
                 type="text"
                 value={drmType}
-                className="w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 text-white"
-                placeholder="None"
+                className="w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 text-white font-mono"
+                placeholder="[Not available]"
                 disabled
             />
+
+            <p className="text-2xl mt-5">Manifest URL</p>
+            <input
+                type="text"
+                value={manifestUrl}
+                className="w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 text-white font-mono"
+                placeholder="[Not available]"
+                disabled
+            />
+
             <p className="text-2xl mt-5">PSSH</p>
             <input
                 type="text"
                 value={pssh}
-                className="w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 text-white"
-                placeholder="None"
+                className="w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 text-white font-mono"
+                placeholder="[Not available]"
                 disabled
             />
+
             <p className="text-2xl mt-5">License URL</p>
             <input
                 type="text"
                 value={licenseUrl}
-                className="w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 text-white"
-                placeholder="None"
+                className="w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 text-white font-mono"
+                placeholder="[Not available]"
                 disabled
             />
+
             <p className="text-2xl mt-5">Keys</p>
-            <div className="w-full min-h-64 h-64 flex items-center justify-center text-center overflow-y-auto bg-slate-800/50 rounded-md p-2 mt-2 text-white whitespace-pre-line">
+            <div className="w-full min-h-64 h-64 flex items-center justify-center text-center overflow-y-auto bg-slate-800/50 rounded-md p-2 mt-2 text-white whitespace-pre-line font-mono">
                 {Array.isArray(keys) && keys.filter((k) => k.type !== "SIGNING").length > 0 ? (
                     keys
                         .filter((k) => k.type !== "SIGNING")
                         .map((k) => `${k.key_id || k.keyId}:${k.key}`)
                         .join("\n")
                 ) : (
-                    <span className="text-gray-400">None</span>
+                    <span className="text-gray-400">[Not available]</span>
                 )}
             </div>
         </div>

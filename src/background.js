@@ -33,6 +33,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.storage.local.set({ licenseURL: data });
             break;
 
+        case "MANIFEST_URL_FOUND":
+            console.log("Storing Manifest URL:", data);
+            chrome.storage.local.set({ manifestURL: data });
+            break;
+
         default:
             console.warn("Unknown message type received:", type);
     }
