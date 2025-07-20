@@ -70,108 +70,129 @@ function safeHeaderShellEscape(str) {
 
 // Intercep network to find manifest
 function injectManifestInterceptor() {
-    const script = document.createElement("script");
-    script.textContent = `
-        (function() {
-            function isProbablyManifest(text = "", contentType = "") {
-                const lowerCT = contentType?.toLowerCase() ?? "";
-                const sample = text.slice(0, 2000);
+    // Execute the interceptor code directly instead of injecting a script
+    (function () {
+        function isProbablyManifest(text = "", contentType = "") {
+            const lowerCT = contentType?.toLowerCase() ?? "";
+            const sample = text.slice(0, 2000);
 
-                const isHLSMime = lowerCT.includes("mpegurl");
-                const isDASHMime = lowerCT.includes("dash+xml");
-                const isSmoothMime = lowerCT.includes("sstr+xml");
+            const isHLSMime = lowerCT.includes("mpegurl");
+            const isDASHMime = lowerCT.includes("dash+xml");
+            const isSmoothMime = lowerCT.includes("sstr+xml");
 
-                const isHLSKeyword = sample.includes("#EXTM3U") || sample.includes("#EXT-X-STREAM-INF");
-                const isDASHKeyword = sample.includes("<MPD") || sample.includes("<AdaptationSet");
-                const isSmoothKeyword = sample.includes("<SmoothStreamingMedia");
-                const isJsonManifest = sample.includes('"playlist"') && sample.includes('"segments"');
+            const isHLSKeyword = sample.includes("#EXTM3U") || sample.includes("#EXT-X-STREAM-INF");
+            const isDASHKeyword = sample.includes("<MPD") || sample.includes("<AdaptationSet");
+            const isSmoothKeyword = sample.includes("<SmoothStreamingMedia");
+            const isJsonManifest = sample.includes('"playlist"') && sample.includes('"segments"');
 
-                return (
-                    isHLSMime || isDASHMime || isSmoothMime ||
-                    isHLSKeyword || isDASHKeyword || isSmoothKeyword || isJsonManifest
-                );
-            }
+            return (
+                isHLSMime ||
+                isDASHMime ||
+                isSmoothMime ||
+                isHLSKeyword ||
+                isDASHKeyword ||
+                isSmoothKeyword ||
+                isJsonManifest
+            );
+        }
 
-            const originalFetch = window.fetch;
-            window.fetch = async function(input, init) {
-                const response = await originalFetch.apply(this, arguments);
+        const originalFetch = window.fetch;
+        window.fetch = async function (input, init) {
+            const response = await originalFetch.apply(this, arguments);
 
-                try {
-                    const clone = response.clone();
-                    const contentType = clone.headers.get("content-type") || "";
-                    const text = await clone.text();
+            try {
+                const clone = response.clone();
+                const contentType = clone.headers.get("content-type") || "";
+                const text = await clone.text();
 
-                    const url = typeof input === "string" ? input : input.url;
+                const url = typeof input === "string" ? input : input.url;
 
-                    if (isProbablyManifest(text, contentType)) {
-                        window.postMessage({ type: "__MANIFEST_URL__", data: url }, "*");
-                        console.log("[Manifest][fetch]", url, contentType);
+                if (isProbablyManifest(text, contentType)) {
+                    window.postMessage({ type: "__MANIFEST_URL__", data: url }, "*");
+                    console.log("[Manifest][fetch]", url, contentType);
 
-                        const headersObj = {};
-                        clone.headers.forEach((value, key) => {
-                            headersObj[key] = value;
-                        });
+                    const headersObj = {};
+                    clone.headers.forEach((value, key) => {
+                        headersObj[key] = value;
+                    });
 
-                        const headerFlags = Object.entries(headersObj)
-                            .map(([key, val]) => '--add-headers "' + safeHeaderShellEscape(key) + ': ' + safeHeaderShellEscape(val) + '"')
-                            .join(" ");
+                    const headerFlags = Object.entries(headersObj)
+                        .map(
+                            ([key, val]) =>
+                                '--add-headers "' +
+                                safeHeaderShellEscape(key) +
+                                ": " +
+                                safeHeaderShellEscape(val) +
+                                '"'
+                        )
+                        .join(" ");
 
-                        window.postMessage({
+                    window.postMessage(
+                        {
                             type: "__MANIFEST_HEADERS__",
                             url,
-                            headers: headerFlags
-                        }, "*");
-                    }
-                } catch (e) {}
+                            headers: headerFlags,
+                        },
+                        "*"
+                    );
+                }
+            } catch (e) {}
 
-                return response;
-            };
+            return response;
+        };
 
-            const originalXHROpen = XMLHttpRequest.prototype.open;
-            const originalXHRSend = XMLHttpRequest.prototype.send;
+        const originalXHROpen = XMLHttpRequest.prototype.open;
+        const originalXHRSend = XMLHttpRequest.prototype.send;
 
-            XMLHttpRequest.prototype.open = function(method, url) {
-                this.__url = url;
-                return originalXHROpen.apply(this, arguments);
-            };
+        XMLHttpRequest.prototype.open = function (method, url) {
+            this.__url = url;
+            return originalXHROpen.apply(this, arguments);
+        };
 
-            XMLHttpRequest.prototype.send = function(body) {
-                this.addEventListener("load", function () {
-                    try {
-                        const contentType = this.getResponseHeader("content-type") || "";
-                        const text = this.responseText;
+        XMLHttpRequest.prototype.send = function (body) {
+            this.addEventListener("load", function () {
+                try {
+                    const contentType = this.getResponseHeader("content-type") || "";
+                    const text = this.responseText;
 
-                        if (isProbablyManifest(text, contentType)) {
-                            window.postMessage({ type: "__MANIFEST_URL__", data: this.__url }, "*");
-                            console.log("[Manifest][xhr]", this.__url, contentType);
+                    if (isProbablyManifest(text, contentType)) {
+                        window.postMessage({ type: "__MANIFEST_URL__", data: this.__url }, "*");
+                        console.log("[Manifest][xhr]", this.__url, contentType);
 
-                            const xhrHeaders = {};
-                            const rawHeaders = this.getAllResponseHeaders().trim().split(/\\r?\\n/);
-                            rawHeaders.forEach(line => {
-                                const parts = line.split(": ");
-                                if (parts.length === 2) {
-                                    xhrHeaders[parts[0]] = parts[1];
-                                }
-                            });
+                        const xhrHeaders = {};
+                        const rawHeaders = this.getAllResponseHeaders().trim().split(/\r?\n/);
+                        rawHeaders.forEach((line) => {
+                            const parts = line.split(": ");
+                            if (parts.length === 2) {
+                                xhrHeaders[parts[0]] = parts[1];
+                            }
+                        });
 
-                            const headerFlags = Object.entries(xhrHeaders)
-                                .map(([key, val]) => '--add-headers "' + safeHeaderShellEscape(key) + ': ' + safeHeaderShellEscape(val) + '"')
-                                .join(" ");
+                        const headerFlags = Object.entries(xhrHeaders)
+                            .map(
+                                ([key, val]) =>
+                                    '--add-headers "' +
+                                    safeHeaderShellEscape(key) +
+                                    ": " +
+                                    safeHeaderShellEscape(val) +
+                                    '"'
+                            )
+                            .join(" ");
 
-                            window.postMessage({
+                        window.postMessage(
+                            {
                                 type: "__MANIFEST_HEADERS__",
                                 url: this.__url,
-                                headers: headerFlags
-                            }, "*");
-                        }
-                    } catch (e) {}
-                });
-                return originalXHRSend.apply(this, arguments);
-            };
-        })();
-    `;
-    document.documentElement.appendChild(script);
-    script.remove();
+                                headers: headerFlags,
+                            },
+                            "*"
+                        );
+                    }
+                } catch (e) {}
+            });
+            return originalXHRSend.apply(this, arguments);
+        };
+    })();
 }
 
 injectManifestInterceptor();
