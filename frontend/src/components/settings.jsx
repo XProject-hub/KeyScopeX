@@ -104,25 +104,28 @@ function Settings({ onConfigSaved }) {
 
     return (
         <div className="w-full h-full overflow-y-auto overflow-x-auto flex flex-col p-4">
+            {storedUrl && (
+                <p className="text-gray-300 mb-2">
+                    Current instance: <span className="text-white font-semibold">{storedUrl}</span>
+                </p>
+            )}
+
+            <p className="mt-3 text-white">New instance URL:</p>
             <input
                 type="text"
                 value={instanceUrl}
                 onChange={(e) => setInstanceUrl(e.target.value)}
-                placeholder={
-                    storedUrl
-                        ? `Current CDRM Instance: ${storedUrl}`
-                        : "CDRM Instance URL (e.g., https://cdrm-project.com/, http://127.0.0.1:5000/)"
-                }
-                className="w-full p-4 text-lg bg-gray-800 text-white border border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mt-4"
+                placeholder="https://cdrm-project.com/, http://127.0.0.1:5000/"
+                className="w-full p-4 text-lg bg-gray-800 text-white border border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mt-4 font-mono"
             />
             <button
                 onClick={handleSave}
                 disabled={loading}
-                className={`mt-4 p-2 ${
+                className={`mt-4 p-2 font-bold ${
                     loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
                 } text-white rounded-md transition duration-300`}
             >
-                {loading ? "Connecting..." : "Save Settings"}
+                {loading ? "Connecting..." : "Save settings"}
             </button>
 
             {message && (
