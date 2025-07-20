@@ -1,7 +1,8 @@
-chrome.action.onClicked.addListener(() => {
+// Open popout window when the extension icon is clicked
+chrome.browserAction.onClicked.addListener(() => {
     chrome.windows.create({
         url: chrome.runtime.getURL("index.html"),
-        type: "popup",
+        type: "popup", // opens as a floating window
         width: 800,
         height: 600,
     });

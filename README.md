@@ -11,6 +11,8 @@ Keep these extension core files inside `src`:
 - `inject.js`
 - `manifest.json`
 
+The `mv2` folder is for Manifest v2 backup for legacy reasons.
+
 Frontend React source stays in `frontend`.
 
 The build process will take care of everything into `extension-release`.
