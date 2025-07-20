@@ -6,6 +6,7 @@ function Results() {
     const [licenseUrl, setLicenseUrl] = useState("");
     const [keys, setKeys] = useState([]);
     const [manifestUrl, setManifestUrl] = useState("");
+    const [currentTabUrl, setCurrentTabUrl] = useState("");
 
     useEffect(() => {
         chrome.storage.local.get(
@@ -35,6 +36,21 @@ function Results() {
                 }
             }
         );
+
+        // Get current tab URL when component mounts
+        chrome.windows.getAll({ populate: true, windowTypes: ["normal"] }, (windows) => {
+            if (windows && windows.length > 0) {
+                const lastFocusedWindow = windows.find((w) => w.focused) || windows[0];
+                if (lastFocusedWindow) {
+                    const activeTab = lastFocusedWindow.tabs.find(
+                        (tab) => tab.active && tab.url && /^https?:\/\//.test(tab.url)
+                    );
+                    if (activeTab?.url) {
+                        setCurrentTabUrl(activeTab.url);
+                    }
+                }
+            }
+        });
 
         const handleChange = (changes, area) => {
             if (area === "local") {
@@ -102,8 +118,31 @@ function Results() {
         });
     };
 
-    // Export to JSON file
+    // Check if current tab is YouTube
+    const isYouTube = () => {
+        return currentTabUrl.includes("youtube.com") || currentTabUrl.includes("youtu.be");
+    };
 
+    // Get manifest URL display value
+    const getManifestDisplayValue = () => {
+        if (manifestUrl) {
+            return manifestUrl;
+        }
+        if (isYouTube()) {
+            return "[Use yt-dlp to download video]";
+        }
+        return "";
+    };
+
+    // Get manifest URL placeholder
+    const getManifestPlaceholder = () => {
+        if (isYouTube() && !manifestUrl) {
+            return "[Use yt-dlp to download video]";
+        }
+        return "[Not available]";
+    };
+
+    // Export to JSON file
     const hasData = () => {
         return (
             drmType ||
@@ -164,9 +203,11 @@ function Results() {
             <p className="text-2xl mt-5">Manifest URL</p>
             <input
                 type="text"
-                value={manifestUrl}
-                className="w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 text-white font-mono"
-                placeholder="[Not available]"
+                value={getManifestDisplayValue()}
+                className={`w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 font-mono ${
+                    isYouTube() && !manifestUrl ? "text-yellow-400" : "text-white"
+                }`}
+                placeholder={getManifestPlaceholder()}
                 disabled
             />
 
