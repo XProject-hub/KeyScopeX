@@ -18,10 +18,10 @@ function Results() {
                 "manifestURL",
             ],
             (result) => {
-                if (result.drmType) setDrmType(result.drmType);
-                if (result.latestPSSH) setPssh(result.latestPSSH);
-                if (result.licenseURL) setLicenseUrl(result.licenseURL);
-                if (result.manifestURL) setManifestUrl(result.manifestURL);
+                if (result.drmType) setDrmType(result.drmType || "");
+                if (result.latestPSSH) setPssh(result.latestPSSH || "");
+                if (result.licenseURL) setLicenseUrl(result.licenseURL || "");
+                if (result.manifestURL) setManifestUrl(result.manifestURL || "");
                 if (result.latestKeys) {
                     try {
                         const parsed = Array.isArray(result.latestKeys)
@@ -39,19 +39,19 @@ function Results() {
         const handleChange = (changes, area) => {
             if (area === "local") {
                 if (changes.drmType) {
-                    setDrmType(changes.drmType.newValue);
+                    setDrmType(changes.drmType.newValue || "");
                 }
                 if (changes.latestPSSH) {
-                    setPssh(changes.latestPSSH.newValue);
+                    setPssh(changes.latestPSSH.newValue || "");
                 }
                 if (changes.licenseURL) {
-                    setLicenseUrl(changes.licenseURL.newValue);
+                    setLicenseUrl(changes.licenseURL.newValue || "");
                 }
                 if (changes.manifestURL) {
-                    setManifestUrl(changes.manifestURL.newValue);
+                    setManifestUrl(changes.manifestURL.newValue || "");
                 }
                 if (changes.latestKeys) {
-                    setKeys(changes.latestKeys.newValue);
+                    setKeys(changes.latestKeys.newValue || []);
                 }
             }
         };
@@ -63,10 +63,10 @@ function Results() {
     const handleCapture = () => {
         // Reset stored values
         chrome.storage.local.set({
-            drmType: "None",
-            latestPSSH: "None",
-            licenseURL: "None",
-            manifestURL: "None",
+            drmType: "",
+            latestPSSH: "",
+            licenseURL: "",
+            manifestURL: "",
             latestKeys: [],
         });
 
@@ -102,11 +102,52 @@ function Results() {
         });
     };
 
+    // Export to JSON file
+
+    const hasData = () => {
+        return (
+            drmType ||
+            pssh ||
+            licenseUrl ||
+            manifestUrl ||
+            (Array.isArray(keys) && keys.filter((k) => k.type !== "SIGNING").length > 0)
+        );
+    };
+
+    const handleExportJSON = () => {
+        const exportData = {
+            drmType: drmType || null,
+            manifestUrl: manifestUrl || null,
+            pssh: pssh || null,
+            licenseUrl: licenseUrl || null,
+            keys:
+                Array.isArray(keys) && keys.length > 0
+                    ? keys
+                          .filter((k) => k.type !== "SIGNING")
+                          .map((k) => `${k.key_id || k.keyId}:${k.key}`)
+                    : null,
+            exportedAt: new Date().toISOString(),
+        };
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+            type: "application/json",
+        });
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `drm-data-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div className="w-full grow flex h-full overflow-y-auto overflow-x-auto flex-col text-white p-4">
             <button
                 onClick={handleCapture}
-                className="w-full h-10 bg-sky-500 rounded-md p-2 mt-2 text-white cursor-pointer hover:bg-sky-600"
+                className="w-full h-10 bg-sky-500 rounded-md p-2 mt-2 text-white cursor-pointer font-bold hover:bg-sky-600"
             >
                 Capture current tab
             </button>
@@ -158,6 +199,15 @@ function Results() {
                     <span className="text-gray-400">[Not available]</span>
                 )}
             </div>
+
+            {hasData() && (
+                <button
+                    onClick={handleExportJSON}
+                    className="w-full h-10 bg-green-500 rounded-md p-2 mt-5 text-white cursor-pointer font-bold hover:bg-green-600"
+                >
+                    Export as JSON
+                </button>
+            )}
         </div>
     );
 }
