@@ -2,6 +2,7 @@ import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import url from "url";
+import syncVersion from "./syncVersion.js";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const frontendDir = path.join(__dirname, "frontend");
@@ -10,21 +11,23 @@ const srcDir = path.join(__dirname, "src");
 const iconDir = path.join(__dirname, "icons");
 const releaseDir = path.join(__dirname, "extension-release");
 
-function run(cmd, cwd) {
+const run = (cmd, cwd) => {
     console.log(`🛠️ Running: ${cmd}`);
     execSync(cmd, { cwd, stdio: "inherit" });
-}
+};
 
-async function copyDir(src, dest) {
+const copyDir = async (src, dest) => {
     await fs.promises.mkdir(dest, { recursive: true });
     await fs.promises.cp(src, dest, {
         recursive: true,
         force: true,
         filter: (src) => !src.endsWith(".map"),
     });
-}
+};
 
-async function main() {
+const main = async () => {
+    await syncVersion();
+
     console.log("🚀 Starting extension build...");
 
     // 1. Install frontend deps if needed
@@ -57,7 +60,7 @@ async function main() {
     await copyDir(iconDir, path.join(releaseDir, "icons"));
 
     console.log("✅ Build complete! extension-release ready.");
-}
+};
 
 main().catch((e) => {
     console.error("❌ Build failed:", e);
