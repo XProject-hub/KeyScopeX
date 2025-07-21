@@ -714,6 +714,81 @@ MediaKeySession.prototype.update = function (response) {
     return updatePromise;
 };
 
+// Helpers
+function detectDRMChallenge(body) {
+    // Handles ArrayBuffer, Uint8Array, string, and JSON string
+    // Returns: { type: "Widevine"|"PlayReady"|null, base64: string|null, bodyType: "buffer"|"string"|"json"|null }
+    if (body instanceof ArrayBuffer || body instanceof Uint8Array) {
+        const buffer = body instanceof Uint8Array ? body : new Uint8Array(body);
+        const base64Body = window.btoa(String.fromCharCode(...buffer));
+        if (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE)) {
+            return { type: "Widevine", base64: base64Body, bodyType: "buffer" };
+        }
+        if (base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) {
+            return { type: "PlayReady", base64: base64Body, bodyType: "buffer" };
+        }
+    } else if (typeof body === "string" && !isJson(body)) {
+        const base64EncodedBody = btoa(body);
+        if (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE)) {
+            return { type: "Widevine", base64: base64EncodedBody, bodyType: "string" };
+        }
+        if (base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) {
+            return { type: "PlayReady", base64: base64EncodedBody, bodyType: "string" };
+        }
+    } else if (typeof body === "string" && isJson(body)) {
+        const jsonBody = JSON.parse(body);
+        if (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE)) {
+            return { type: "Widevine", base64: null, bodyType: "json" };
+        }
+        if (jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) {
+            return { type: "PlayReady", base64: null, bodyType: "json" };
+        }
+    }
+    return { type: null, base64: null, bodyType: null };
+}
+
+function handleLicenseMode({
+    drmInfo,
+    body,
+    setBody, // function to set the new body (for fetch: (b) => config.body = b, for XHR: (b) => originalSend.call(this, b))
+    urlOrResource,
+    getWidevinePssh,
+    getPlayreadyPssh,
+    widevineDeviceInfo,
+    playreadyDeviceInfo,
+}) {
+    foundChallengeInBody = true;
+    window.postMessage({ type: "__LICENSE_URL__", data: urlOrResource }, "*");
+
+    // Create remoteCDM if needed
+    if (!remoteCDM) {
+        if (drmInfo.type === "Widevine") {
+            remoteCDM = createAndOpenRemoteCDM("Widevine", widevineDeviceInfo, getWidevinePssh());
+        }
+        if (drmInfo.type === "PlayReady") {
+            remoteCDM = createAndOpenRemoteCDM(
+                "PlayReady",
+                playreadyDeviceInfo,
+                getPlayreadyPssh()
+            );
+        }
+    }
+    if (remoteCDM && remoteCDM.challenge === null) {
+        remoteCDM.getChallenge(getWidevinePssh());
+    }
+
+    // Inject the new challenge into the request body
+    if (drmInfo.bodyType === "json") {
+        const jsonBody = JSON.parse(body);
+        const injectedBody = jsonReplaceValue(jsonBody, remoteCDM.challenge);
+        setBody(JSON.stringify(injectedBody));
+    } else if (drmInfo.bodyType === "buffer") {
+        setBody(base64ToUint8Array(remoteCDM.challenge));
+    } else {
+        setBody(atob(remoteCDM.challenge));
+    }
+}
+
 // fetch POST interceptor
 (function () {
     const originalFetch = window.fetch;
@@ -724,146 +799,37 @@ MediaKeySession.prototype.update = function (response) {
         if (method === "POST") {
             let body = config.body;
             if (body) {
-                if (body instanceof ArrayBuffer || body instanceof Uint8Array) {
-                    const buffer = body instanceof Uint8Array ? body : new Uint8Array(body);
-                    const base64Body = window.btoa(String.fromCharCode(...buffer));
-                    if (
-                        (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE) ||
-                            base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
-                        (!remoteCDM ||
-                            remoteCDM.challenge === null ||
-                            base64Body !== remoteCDM.challenge) &&
-                        interceptType === "EME"
-                    ) {
-                        foundChallengeInBody = true;
-                        window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
-                        // Block the request
-                        return;
-                    }
-                    if (
-                        (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE) ||
-                            base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
-                        interceptType == "LICENSE" &&
-                        !foundChallengeInBody
-                    ) {
-                        foundChallengeInBody = true;
-                        window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
-                        if (!remoteCDM) {
-                            if (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE)) {
-                                remoteCDM = createAndOpenRemoteCDM(
-                                    "Widevine",
-                                    widevineDeviceInfo,
-                                    foundWidevinePssh
-                                );
-                            }
-                            if (base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) {
-                                remoteCDM = createAndOpenRemoteCDM(
-                                    "PlayReady",
-                                    playreadyDeviceInfo,
-                                    foundPlayreadyPssh
-                                );
-                            }
-                        }
-                        if (remoteCDM && remoteCDM.challenge === null) {
-                            remoteCDM.getChallenge(foundWidevinePssh);
-                        }
-                        const injectedBody = base64ToUint8Array(remoteCDM.challenge);
-                        config.body = injectedBody;
-                        return originalFetch(resource, config);
-                    }
-                }
-                if (typeof body === "string" && !isJson(body)) {
-                    const base64EncodedBody = btoa(body);
-                    if (
-                        (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE) ||
-                            base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
-                        (!remoteCDM ||
-                            remoteCDM.challenge === null ||
-                            base64EncodedBody !== remoteCDM.challenge) &&
-                        interceptType === "EME"
-                    ) {
-                        foundChallengeInBody = true;
-                        window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
-                        // Block the request
-                        return;
-                    }
-                    if (
-                        (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE) ||
-                            base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
-                        interceptType == "LICENSE" &&
-                        !foundChallengeInBody
-                    ) {
-                        foundChallengeInBody = true;
-                        window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
-                        if (!remoteCDM) {
-                            if (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE)) {
-                                remoteCDM = createAndOpenRemoteCDM(
-                                    "Widevine",
-                                    widevineDeviceInfo,
-                                    foundWidevinePssh
-                                );
-                            }
-                            if (base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) {
-                                remoteCDM = createAndOpenRemoteCDM(
-                                    "PlayReady",
-                                    playreadyDeviceInfo,
-                                    foundPlayreadyPssh
-                                );
-                            }
-                        }
-                        if (remoteCDM && remoteCDM.challenge === null) {
-                            remoteCDM.getChallenge(foundWidevinePssh);
-                        }
-                        const injectedBody = atob(remoteCDM.challenge);
-                        config.body = injectedBody;
-                        return originalFetch(resource, config);
-                    }
-                }
-                if (typeof body === "string" && isJson(body)) {
-                    const jsonBody = JSON.parse(body);
+                const drmInfo = detectDRMChallenge(body);
 
-                    if (
-                        (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE) ||
-                            jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) &&
-                        (!remoteCDM || remoteCDM.challenge === null) &&
-                        interceptType === "EME"
-                    ) {
-                        foundChallengeInBody = true;
-                        window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
-                        // Block the request
-                        return;
-                    }
+                // EME mode: block the request if a DRM challenge is detected
+                if (
+                    drmInfo.type &&
+                    (!remoteCDM ||
+                        remoteCDM.challenge === null ||
+                        drmInfo.base64 !== remoteCDM.challenge) &&
+                    interceptType === "EME"
+                ) {
+                    foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
+                    // Block the request
+                    return;
+                }
 
-                    if (
-                        (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE) ||
-                            jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) &&
-                        interceptType === "LICENSE" &&
-                        !foundChallengeInBody
-                    ) {
-                        foundChallengeInBody = true;
-                        window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
-                        if (!remoteCDM) {
-                            if (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE)) {
-                                remoteCDM = createAndOpenRemoteCDM(
-                                    "Widevine",
-                                    widevineDeviceInfo,
-                                    foundWidevinePssh
-                                );
-                            }
-                            if (jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) {
-                                remoteCDM = createAndOpenRemoteCDM(
-                                    "PlayReady",
-                                    playreadyDeviceInfo,
-                                    foundPlayreadyPssh
-                                );
-                            }
-                        }
-                        if (remoteCDM && remoteCDM.challenge === null) {
-                            remoteCDM.getChallenge(foundWidevinePssh);
-                        }
-                        const injectedBody = jsonReplaceValue(jsonBody, remoteCDM.challenge);
-                        config.body = JSON.stringify(injectedBody);
-                    }
+                // LICENSE mode: replace the challenge in the request
+                if (drmInfo.type && interceptType === "LICENSE" && !foundChallengeInBody) {
+                    handleLicenseMode({
+                        drmInfo,
+                        body,
+                        setBody: (b) => {
+                            config.body = b;
+                        },
+                        urlOrResource: resource,
+                        getWidevinePssh: () => foundWidevinePssh,
+                        getPlayreadyPssh: () => foundPlayreadyPssh,
+                        widevineDeviceInfo,
+                        playreadyDeviceInfo,
+                    });
+                    return originalFetch(resource, config);
                 }
             }
         }
@@ -886,146 +852,34 @@ MediaKeySession.prototype.update = function (response) {
     XMLHttpRequest.prototype.send = function (body) {
         if (this._method && this._method.toUpperCase() === "POST") {
             if (body) {
-                if (body instanceof ArrayBuffer || body instanceof Uint8Array) {
-                    const buffer = body instanceof Uint8Array ? body : new Uint8Array(body);
-                    const base64Body = window.btoa(String.fromCharCode(...buffer));
-                    if (
-                        (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE) ||
-                            base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
-                        (!remoteCDM ||
-                            remoteCDM.challenge === null ||
-                            base64Body !== remoteCDM.challenge) &&
-                        interceptType === "EME"
-                    ) {
-                        foundChallengeInBody = true;
-                        window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
-                        // Block the request
-                        return;
-                    }
-                    if (
-                        (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE) ||
-                            base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
-                        interceptType == "LICENSE" &&
-                        !foundChallengeInBody
-                    ) {
-                        foundChallengeInBody = true;
-                        window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
-                        if (!remoteCDM) {
-                            if (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE)) {
-                                remoteCDM = createAndOpenRemoteCDM(
-                                    "Widevine",
-                                    widevineDeviceInfo,
-                                    foundWidevinePssh
-                                );
-                            }
-                            if (base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) {
-                                remoteCDM = createAndOpenRemoteCDM(
-                                    "PlayReady",
-                                    playreadyDeviceInfo,
-                                    foundPlayreadyPssh
-                                );
-                            }
-                        }
-                        if (remoteCDM && remoteCDM.challenge === null) {
-                            remoteCDM.getChallenge(foundWidevinePssh);
-                        }
-                        const injectedBody = base64ToUint8Array(remoteCDM.challenge);
-                        return originalSend.call(this, injectedBody);
-                    }
+                const drmInfo = detectDRMChallenge(body);
+
+                // EME mode: block the request if a DRM challenge is detected
+                if (
+                    drmInfo.type &&
+                    (!remoteCDM ||
+                        remoteCDM.challenge === null ||
+                        drmInfo.base64 !== remoteCDM.challenge) &&
+                    interceptType === "EME"
+                ) {
+                    foundChallengeInBody = true;
+                    window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
+                    // Block the request
+                    return;
                 }
 
-                if (typeof body === "string" && !isJson(body)) {
-                    const base64EncodedBody = btoa(body);
-                    if (
-                        (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE) ||
-                            base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
-                        (!remoteCDM ||
-                            remoteCDM.challenge === null ||
-                            base64EncodedBody !== remoteCDM.challenge) &&
-                        interceptType === "EME"
-                    ) {
-                        foundChallengeInBody = true;
-                        window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
-                        // Block the request
-                        return;
-                    }
-                    if (
-                        (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE) ||
-                            base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
-                        interceptType == "LICENSE" &&
-                        !foundChallengeInBody
-                    ) {
-                        foundChallengeInBody = true;
-                        window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
-                        if (!remoteCDM) {
-                            if (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE)) {
-                                remoteCDM = createAndOpenRemoteCDM(
-                                    "Widevine",
-                                    widevineDeviceInfo,
-                                    foundWidevinePssh
-                                );
-                            }
-                            if (base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) {
-                                remoteCDM = createAndOpenRemoteCDM(
-                                    "PlayReady",
-                                    playreadyDeviceInfo,
-                                    foundPlayreadyPssh
-                                );
-                            }
-                        }
-                        if (remoteCDM && remoteCDM.challenge === null) {
-                            remoteCDM.getChallenge(foundWidevinePssh);
-                        }
-                        const injectedBody = atob(remoteCDM.challenge);
-                        return originalSend.call(this, injectedBody);
-                    }
-                }
-
-                if (typeof body === "string" && isJson(body)) {
-                    const jsonBody = JSON.parse(body);
-
-                    if (
-                        (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE) ||
-                            jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) &&
-                        (!remoteCDM || remoteCDM.challenge === null) &&
-                        interceptType === "EME"
-                    ) {
-                        foundChallengeInBody = true;
-                        window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
-                        // Block the request
-                        return;
-                    }
-
-                    if (
-                        (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE) ||
-                            jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) &&
-                        interceptType === "LICENSE" &&
-                        !foundChallengeInBody
-                    ) {
-                        foundChallengeInBody = true;
-                        window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
-                        if (!remoteCDM) {
-                            if (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE)) {
-                                remoteCDM = createAndOpenRemoteCDM(
-                                    "Widevine",
-                                    widevineDeviceInfo,
-                                    foundWidevinePssh
-                                );
-                            }
-                            if (jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) {
-                                remoteCDM = createAndOpenRemoteCDM(
-                                    "PlayReady",
-                                    playreadyDeviceInfo,
-                                    foundPlayreadyPssh
-                                );
-                            }
-                        }
-                        if (remoteCDM && remoteCDM.challenge === null) {
-                            remoteCDM.getChallenge(foundWidevinePssh);
-                        }
-                        const injectedBody = jsonReplaceValue(jsonBody, remoteCDM.challenge);
-                        return originalSend.call(this, JSON.stringify(injectedBody));
-                    }
+                // LICENSE mode: replace the challenge in the request
+                if (drmInfo.type && interceptType === "LICENSE" && !foundChallengeInBody) {
+                    return handleLicenseMode({
+                        drmInfo,
+                        body,
+                        setBody: (b) => originalSend.call(this, b),
+                        urlOrResource: this._url,
+                        getWidevinePssh: () => foundWidevinePssh,
+                        getPlayreadyPssh: () => foundPlayreadyPssh,
+                        widevineDeviceInfo,
+                        playreadyDeviceInfo,
+                    });
                 }
             }
         }
