@@ -68,6 +68,35 @@ function safeHeaderShellEscape(str) {
         .replace(/\n/g, ""); // strip newlines
 }
 
+function headersToFlags(headersObj) {
+    return Object.entries(headersObj)
+        .map(
+            ([key, val]) =>
+                '--add-headers "' +
+                safeHeaderShellEscape(key) +
+                ": " +
+                safeHeaderShellEscape(val) +
+                '"'
+        )
+        .join(" ");
+}
+
+function handleManifestDetection(url, headersObj, contentType, source) {
+    window.postMessage({ type: "__MANIFEST_URL__", data: url }, "*");
+    console.log(`[Manifest][${source}]`, url, contentType);
+
+    const headerFlags = headersToFlags(headersObj);
+
+    window.postMessage(
+        {
+            type: "__MANIFEST_HEADERS__",
+            url,
+            headers: headerFlags,
+        },
+        "*"
+    );
+}
+
 // Intercep network to find manifest
 function injectManifestInterceptor() {
     // Execute the interceptor code directly instead of injecting a script
@@ -108,33 +137,11 @@ function injectManifestInterceptor() {
                 const url = typeof input === "string" ? input : input.url;
 
                 if (isProbablyManifest(text, contentType)) {
-                    window.postMessage({ type: "__MANIFEST_URL__", data: url }, "*");
-                    console.log("[Manifest][fetch]", url, contentType);
-
                     const headersObj = {};
                     clone.headers.forEach((value, key) => {
                         headersObj[key] = value;
                     });
-
-                    const headerFlags = Object.entries(headersObj)
-                        .map(
-                            ([key, val]) =>
-                                '--add-headers "' +
-                                safeHeaderShellEscape(key) +
-                                ": " +
-                                safeHeaderShellEscape(val) +
-                                '"'
-                        )
-                        .join(" ");
-
-                    window.postMessage(
-                        {
-                            type: "__MANIFEST_HEADERS__",
-                            url,
-                            headers: headerFlags,
-                        },
-                        "*"
-                    );
+                    handleManifestDetection(url, headersObj, contentType, "fetch");
                 }
             } catch (e) {}
 
@@ -156,9 +163,6 @@ function injectManifestInterceptor() {
                     const text = this.responseText;
 
                     if (isProbablyManifest(text, contentType)) {
-                        window.postMessage({ type: "__MANIFEST_URL__", data: this.__url }, "*");
-                        console.log("[Manifest][xhr]", this.__url, contentType);
-
                         const xhrHeaders = {};
                         const rawHeaders = this.getAllResponseHeaders().trim().split(/\r?\n/);
                         rawHeaders.forEach((line) => {
@@ -167,26 +171,7 @@ function injectManifestInterceptor() {
                                 xhrHeaders[parts[0]] = parts[1];
                             }
                         });
-
-                        const headerFlags = Object.entries(xhrHeaders)
-                            .map(
-                                ([key, val]) =>
-                                    '--add-headers "' +
-                                    safeHeaderShellEscape(key) +
-                                    ": " +
-                                    safeHeaderShellEscape(val) +
-                                    '"'
-                            )
-                            .join(" ");
-
-                        window.postMessage(
-                            {
-                                type: "__MANIFEST_HEADERS__",
-                                url: this.__url,
-                                headers: headerFlags,
-                            },
-                            "*"
-                        );
+                        handleManifestDetection(this.__url, xhrHeaders, contentType, "xhr");
                     }
                 } catch (e) {}
             });
@@ -197,21 +182,19 @@ function injectManifestInterceptor() {
 
 injectManifestInterceptor();
 
-// PlayReady Remote CDM Class
-class remotePlayReadyCDM {
-    constructor(security_level, host, secret, device_name) {
-        this.security_level = security_level;
+class RemoteCDMBase {
+    constructor({ host, secret, device_name, security_level }) {
         this.host = host;
         this.secret = secret;
         this.device_name = device_name;
+        this.security_level = security_level;
         this.session_id = null;
         this.challenge = null;
         this.keys = null;
     }
 
-    // Open PlayReady session
-    openSession() {
-        const url = `${this.host}/remotecdm/playready/${this.device_name}/open`;
+    openSession(path) {
+        const url = `${this.host}${path}/open`;
         const xhr = new XMLHttpRequest();
         xhr.open("GET", url, false);
         xhr.setRequestHeader("Content-Type", "application/json");
@@ -219,126 +202,127 @@ class remotePlayReadyCDM {
         const jsonData = JSON.parse(xhr.responseText);
         if (jsonData.data?.session_id) {
             this.session_id = jsonData.data.session_id;
-            console.log("PlayReady session opened:", this.session_id);
+            console.log("Session opened:", this.session_id);
         } else {
-            console.error("Failed to open PlayReady session:", jsonData.message);
-            throw new Error("Failed to open PlayReady session");
+            console.error("Failed to open session:", jsonData.message);
+            throw new Error("Failed to open session");
         }
     }
 
-    // Get PlayReady challenge
-    getChallenge(init_data) {
-        const url = `${this.host}/remotecdm/playready/${this.device_name}/get_license_challenge`;
+    getChallenge(path, body) {
+        const url = `${this.host}${path}/get_license_challenge`;
         const xhr = new XMLHttpRequest();
         xhr.open("POST", url, false);
         xhr.setRequestHeader("Content-Type", "application/json");
-        const body = {
-            session_id: this.session_id,
-            init_data: init_data,
-        };
         xhr.send(JSON.stringify(body));
         const jsonData = JSON.parse(xhr.responseText);
         if (jsonData.data?.challenge) {
             this.challenge = btoa(jsonData.data.challenge);
-            console.log("PlayReady challenge received:", this.challenge);
+            console.log("Challenge received:", this.challenge);
+        } else if (jsonData.data?.challenge_b64) {
+            this.challenge = jsonData.data.challenge_b64;
+            console.log("Challenge received:", this.challenge);
         } else {
-            console.error("Failed to get PlayReady challenge:", jsonData.message);
-            throw new Error("Failed to get PlayReady challenge");
+            console.error("Failed to get challenge:", jsonData.message);
+            throw new Error("Failed to get challenge");
         }
     }
 
-    // Parse PlayReady license response
-    parseLicense(license_message) {
-        const url = `${this.host}/remotecdm/playready/${this.device_name}/parse_license`;
+    parseLicense(path, body) {
+        const url = `${this.host}${path}/parse_license`;
         const xhr = new XMLHttpRequest();
         xhr.open("POST", url, false);
         xhr.setRequestHeader("Content-Type", "application/json");
-        const body = {
-            session_id: this.session_id,
-            license_message: license_message,
-        };
         xhr.send(JSON.stringify(body));
         const jsonData = JSON.parse(xhr.responseText);
-        if (
-            jsonData.message === "Successfully parsed and loaded the Keys from the License message"
-        ) {
-            console.log("PlayReady license response parsed successfully");
+        if (jsonData.status === 200 || jsonData.message?.includes("parsed and loaded")) {
+            console.log("License response parsed successfully");
             return true;
         } else {
-            console.error("Failed to parse PlayReady license response:", jsonData.message);
-            throw new Error("Failed to parse PlayReady license response");
+            console.error("Failed to parse license response:", jsonData.message);
+            throw new Error("Failed to parse license response");
         }
     }
 
-    // Get PlayReady keys
-    getKeys() {
-        const url = `${this.host}/remotecdm/playready/${this.device_name}/get_keys`;
+    getKeys(path, body, extraPath = "") {
+        const url = `${this.host}${path}/get_keys${extraPath}`;
         const xhr = new XMLHttpRequest();
         xhr.open("POST", url, false);
         xhr.setRequestHeader("Content-Type", "application/json");
-        const body = {
-            session_id: this.session_id,
-        };
         xhr.send(JSON.stringify(body));
         const jsonData = JSON.parse(xhr.responseText);
         if (jsonData.data?.keys) {
             this.keys = jsonData.data.keys;
-            console.log("PlayReady keys received:", this.keys);
+            console.log("Keys received:", this.keys);
         } else {
-            console.error("Failed to get PlayReady keys:", jsonData.message);
-            throw new Error("Failed to get PlayReady keys");
+            console.error("Failed to get keys:", jsonData.message);
+            throw new Error("Failed to get keys");
         }
     }
 
-    // Close PlayReady session
-    closeSession() {
-        const url = `${this.host}/remotecdm/playready/${this.device_name}/close/${this.session_id}`;
+    closeSession(path) {
+        const url = `${this.host}${path}/close/${this.session_id}`;
         const xhr = new XMLHttpRequest();
         xhr.open("GET", url, false);
         xhr.setRequestHeader("Content-Type", "application/json");
         xhr.send();
         const jsonData = JSON.parse(xhr.responseText);
         if (jsonData) {
-            console.log("PlayReady session closed successfully");
+            console.log("Session closed successfully");
         } else {
-            console.error("Failed to close PlayReady session:", jsonData.message);
-            throw new Error("Failed to close PlayReady session");
+            console.error("Failed to close session:", jsonData.message);
+            throw new Error("Failed to close session");
         }
     }
 }
 
+// PlayReady Remote CDM Class
+class remotePlayReadyCDM extends RemoteCDMBase {
+    constructor(security_level, host, secret, device_name) {
+        super({ host, secret, device_name, security_level });
+    }
+
+    openSession() {
+        super.openSession(`/remotecdm/playready/${this.device_name}`);
+    }
+
+    getChallenge(init_data) {
+        super.getChallenge(`/remotecdm/playready/${this.device_name}`, {
+            session_id: this.session_id,
+            init_data: init_data,
+        });
+    }
+
+    parseLicense(license_message) {
+        return super.parseLicense(`/remotecdm/playready/${this.device_name}`, {
+            session_id: this.session_id,
+            license_message: license_message,
+        });
+    }
+
+    getKeys() {
+        super.getKeys(`/remotecdm/playready/${this.device_name}`, {
+            session_id: this.session_id,
+        });
+    }
+
+    closeSession() {
+        super.closeSession(`/remotecdm/playready/${this.device_name}`);
+    }
+}
+
 // Widevine Remote CDM Class
-class remoteWidevineCDM {
+class remoteWidevineCDM extends RemoteCDMBase {
     constructor(device_type, system_id, security_level, host, secret, device_name) {
+        super({ host, secret, device_name, security_level });
         this.device_type = device_type;
         this.system_id = system_id;
-        this.security_level = security_level;
-        this.host = host;
-        this.secret = secret;
-        this.device_name = device_name;
-        this.session_id = null;
-        this.challenge = null;
-        this.keys = null;
     }
 
-    // Open Widevine session
     openSession() {
-        const url = `${this.host}/remotecdm/widevine/${this.device_name}/open`;
-        const xhr = new XMLHttpRequest();
-        xhr.open("GET", url, false);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.send();
-        const jsonData = JSON.parse(xhr.responseText);
-        if (jsonData.data?.session_id) {
-            this.session_id = jsonData.data.session_id;
-            console.log("Widevine session opened:", this.session_id);
-        } else {
-            console.error("Failed to open Widevine session:", jsonData.message);
-            throw new Error("Failed to open Widevine session");
-        }
+        super.openSession(`/remotecdm/widevine/${this.device_name}`);
     }
 
-    // Set Widevine service certificate
     setServiceCertificate(certificate) {
         const url = `${this.host}/remotecdm/widevine/${this.device_name}/set_service_certificate`;
         const xhr = new XMLHttpRequest();
@@ -358,7 +342,6 @@ class remoteWidevineCDM {
         }
     }
 
-    // Get Widevine challenge
     getChallenge(init_data, license_type = "STREAMING") {
         const url = `${this.host}/remotecdm/widevine/${this.device_name}/get_license_challenge/${license_type}`;
         const xhr = new XMLHttpRequest();
@@ -380,61 +363,25 @@ class remoteWidevineCDM {
         }
     }
 
-    // Parse Widevine license response
     parseLicense(license_message) {
-        const url = `${this.host}/remotecdm/widevine/${this.device_name}/parse_license`;
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", url, false);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        const body = {
+        return super.parseLicense(`/remotecdm/widevine/${this.device_name}`, {
             session_id: this.session_id,
             license_message: license_message,
-        };
-        xhr.send(JSON.stringify(body));
-        const jsonData = JSON.parse(xhr.responseText);
-        if (jsonData.status === 200) {
-            console.log("Widevine license response parsed successfully");
-            return true;
-        } else {
-            console.error("Failed to parse Widevine license response:", jsonData.message);
-            throw new Error("Failed to parse Widevine license response");
-        }
+        });
     }
 
-    // Get Widevine keys
     getKeys() {
-        const url = `${this.host}/remotecdm/widevine/${this.device_name}/get_keys/ALL`;
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", url, false);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        const body = {
-            session_id: this.session_id,
-        };
-        xhr.send(JSON.stringify(body));
-        const jsonData = JSON.parse(xhr.responseText);
-        if (jsonData.data?.keys) {
-            this.keys = jsonData.data.keys;
-            console.log("Widevine keys received:", this.keys);
-        } else {
-            console.error("Failed to get Widevine keys:", jsonData.message);
-            throw new Error("Failed to get Widevine keys");
-        }
+        super.getKeys(
+            `/remotecdm/widevine/${this.device_name}`,
+            {
+                session_id: this.session_id,
+            },
+            "/ALL"
+        );
     }
 
-    // Close Widevine session
     closeSession() {
-        const url = `${this.host}/remotecdm/widevine/${this.device_name}/close/${this.session_id}`;
-        const xhr = new XMLHttpRequest();
-        xhr.open("GET", url, false);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.send();
-        const jsonData = JSON.parse(xhr.responseText);
-        if (jsonData) {
-            console.log("Widevine session closed successfully");
-        } else {
-            console.error("Failed to close Widevine session:", jsonData.message);
-            throw new Error("Failed to close Widevine session");
-        }
+        super.closeSession(`/remotecdm/widevine/${this.device_name}`);
     }
 }
 
