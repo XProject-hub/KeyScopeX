@@ -144,13 +144,7 @@ function Results() {
 
     // Export to JSON file
     const hasData = () => {
-        return (
-            drmType ||
-            pssh ||
-            licenseUrl ||
-            manifestUrl ||
-            (Array.isArray(keys) && keys.filter((k) => k.type !== "SIGNING").length > 0)
-        );
+        return Array.isArray(keys) && keys.filter((k) => k.type !== "SIGNING").length > 0;
     };
 
     const handleExportJSON = () => {
