@@ -17,6 +17,13 @@ let foundChallengeInBody = false;
 let licenseResponseCounter = 0;
 let keysRetrieved = false;
 
+const DRM_SIGNATURES = {
+    WIDEVINE: "CAES",
+    PLAYREADY: "PD94",
+    SERVICE_CERT: "CAUS",
+    WIDEVINE_INIT: "CAQ=",
+};
+
 // Post message to content.js to get DRM override
 window.postMessage({ type: "__GET_DRM_OVERRIDE__" }, "*");
 
@@ -398,7 +405,7 @@ function b64ToHexStr(b64) {
     return [...atob(b64)].map((c) => c.charCodeAt(0).toString(16).padStart(2, "0")).join``;
 }
 
-function jsonContainsValue(obj, prefix = "CAES") {
+function jsonContainsValue(obj, prefix = DRM_SIGNATURES.WIDEVINE) {
     if (typeof obj === "string") return obj.startsWith(prefix);
     if (Array.isArray(obj)) return obj.some((val) => jsonContainsValue(val, prefix));
     if (typeof obj === "object" && obj !== null) {
@@ -409,7 +416,9 @@ function jsonContainsValue(obj, prefix = "CAES") {
 
 function jsonReplaceValue(obj, newValue) {
     if (typeof obj === "string") {
-        return obj.startsWith("CAES") || obj.startsWith("PD94") ? newValue : obj;
+        return obj.startsWith(DRM_SIGNATURES.WIDEVINE) || obj.startsWith(DRM_SIGNATURES.PLAYREADY)
+            ? newValue
+            : obj;
     }
 
     if (Array.isArray(obj)) {
@@ -516,7 +525,11 @@ MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
             event.stopImmediatePropagation();
             const uint8Array = new Uint8Array(event.message);
             const base64challenge = arrayBufferToBase64(uint8Array);
-            if (base64challenge === "CAQ=" && interceptType !== "DISABLED" && !serviceCertFound) {
+            if (
+                base64challenge === DRM_SIGNATURES.WIDEVINE_INIT &&
+                interceptType !== "DISABLED" &&
+                !serviceCertFound
+            ) {
                 const { device_type, system_id, security_level, host, secret, device_name } =
                     widevineDeviceInfo;
                 remoteCDM = new remoteWidevineCDM(
@@ -529,14 +542,18 @@ MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
                 );
                 remoteCDM.openSession();
             }
-            if (!injectionSuccess && base64challenge !== "CAQ=" && interceptType !== "DISABLED") {
+            if (
+                !injectionSuccess &&
+                base64challenge !== DRM_SIGNATURES.WIDEVINE_INIT &&
+                interceptType !== "DISABLED"
+            ) {
                 if (interceptType === "EME") {
                     injectionSuccess = true;
                 }
                 if (!originalChallenge) {
                     originalChallenge = base64challenge;
                 }
-                if (originalChallenge.startsWith("CAES")) {
+                if (originalChallenge.startsWith(DRM_SIGNATURES.WIDEVINE)) {
                     window.postMessage({ type: "__DRM_TYPE__", data: "Widevine" }, "*");
                     window.postMessage({ type: "__PSSH_DATA__", data: foundWidevinePssh }, "*");
                     if (interceptType === "EME" && !remoteCDM) {
@@ -560,7 +577,7 @@ MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
                         remoteCDM.getChallenge(foundWidevinePssh);
                     }
                 }
-                if (!originalChallenge.startsWith("CAES")) {
+                if (!originalChallenge.startsWith(DRM_SIGNATURES.WIDEVINE)) {
                     const buffer = event.message;
                     const decoder = new TextDecoder("utf-16");
                     const decodedText = decoder.decode(buffer);
@@ -616,7 +633,12 @@ const originalUpdate = MediaKeySession.prototype.update;
 MediaKeySession.prototype.update = function (response) {
     const uint8 = response instanceof Uint8Array ? response : new Uint8Array(response);
     const base64Response = window.btoa(String.fromCharCode(...uint8));
-    if (base64Response.startsWith("CAUS") && foundWidevinePssh && remoteCDM && !serviceCertFound) {
+    if (
+        base64Response.startsWith(DRM_SIGNATURES.SERVICE_CERT) &&
+        foundWidevinePssh &&
+        remoteCDM &&
+        !serviceCertFound
+    ) {
         remoteCDM.setServiceCertificate(base64Response);
         if (interceptType === "EME" && !remoteCDM.challenge) {
             remoteCDM.getChallenge(foundWidevinePssh);
@@ -626,7 +648,7 @@ MediaKeySession.prototype.update = function (response) {
         serviceCertFound = true;
     }
     if (
-        !base64Response.startsWith("CAUS") &&
+        !base64Response.startsWith(DRM_SIGNATURES.SERVICE_CERT) &&
         (foundWidevinePssh || foundPlayreadyPssh) &&
         !keysRetrieved
     ) {
@@ -680,7 +702,8 @@ MediaKeySession.prototype.update = function (response) {
                     const buffer = body instanceof Uint8Array ? body : new Uint8Array(body);
                     const base64Body = window.btoa(String.fromCharCode(...buffer));
                     if (
-                        (base64Body.startsWith("CAES") || base64Body.startsWith("PD94")) &&
+                        (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE) ||
+                            base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
                         (!remoteCDM ||
                             remoteCDM.challenge === null ||
                             base64Body !== remoteCDM.challenge) &&
@@ -692,14 +715,15 @@ MediaKeySession.prototype.update = function (response) {
                         return;
                     }
                     if (
-                        (base64Body.startsWith("CAES") || base64Body.startsWith("PD94")) &&
+                        (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE) ||
+                            base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
                         interceptType == "LICENSE" &&
                         !foundChallengeInBody
                     ) {
                         foundChallengeInBody = true;
                         window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
                         if (!remoteCDM) {
-                            if (base64Body.startsWith("CAES")) {
+                            if (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE)) {
                                 const {
                                     device_type,
                                     system_id,
@@ -719,7 +743,7 @@ MediaKeySession.prototype.update = function (response) {
                                 remoteCDM.openSession();
                                 remoteCDM.getChallenge(foundWidevinePssh);
                             }
-                            if (base64Body.startsWith("PD94")) {
+                            if (base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) {
                                 const { security_level, host, secret, device_name } =
                                     playreadyDeviceInfo;
                                 remoteCDM = new remotePlayReadyCDM(
@@ -743,8 +767,8 @@ MediaKeySession.prototype.update = function (response) {
                 if (typeof body === "string" && !isJson(body)) {
                     const base64EncodedBody = btoa(body);
                     if (
-                        (base64EncodedBody.startsWith("CAES") ||
-                            base64EncodedBody.startsWith("PD94")) &&
+                        (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE) ||
+                            base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
                         (!remoteCDM ||
                             remoteCDM.challenge === null ||
                             base64EncodedBody !== remoteCDM.challenge) &&
@@ -756,15 +780,15 @@ MediaKeySession.prototype.update = function (response) {
                         return;
                     }
                     if (
-                        (base64EncodedBody.startsWith("CAES") ||
-                            base64EncodedBody.startsWith("PD94")) &&
+                        (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE) ||
+                            base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
                         interceptType == "LICENSE" &&
                         !foundChallengeInBody
                     ) {
                         foundChallengeInBody = true;
                         window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
                         if (!remoteCDM) {
-                            if (base64EncodedBody.startsWith("CAES")) {
+                            if (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE)) {
                                 const {
                                     device_type,
                                     system_id,
@@ -784,7 +808,7 @@ MediaKeySession.prototype.update = function (response) {
                                 remoteCDM.openSession();
                                 remoteCDM.getChallenge(foundWidevinePssh);
                             }
-                            if (base64EncodedBody.startsWith("PD94")) {
+                            if (base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) {
                                 const { security_level, host, secret, device_name } =
                                     playreadyDeviceInfo;
                                 remoteCDM = new remotePlayReadyCDM(
@@ -809,8 +833,8 @@ MediaKeySession.prototype.update = function (response) {
                     const jsonBody = JSON.parse(body);
 
                     if (
-                        (jsonContainsValue(jsonBody, "CAES") ||
-                            jsonContainsValue(jsonBody, "PD94")) &&
+                        (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE) ||
+                            jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) &&
                         (!remoteCDM || remoteCDM.challenge === null) &&
                         interceptType === "EME"
                     ) {
@@ -821,15 +845,15 @@ MediaKeySession.prototype.update = function (response) {
                     }
 
                     if (
-                        (jsonContainsValue(jsonBody, "CAES") ||
-                            jsonContainsValue(jsonBody, "PD94")) &&
+                        (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE) ||
+                            jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) &&
                         interceptType === "LICENSE" &&
                         !foundChallengeInBody
                     ) {
                         foundChallengeInBody = true;
                         window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
                         if (!remoteCDM) {
-                            if (jsonContainsValue(jsonBody, "CAES")) {
+                            if (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE)) {
                                 const {
                                     device_type,
                                     system_id,
@@ -849,7 +873,7 @@ MediaKeySession.prototype.update = function (response) {
                                 remoteCDM.openSession();
                                 remoteCDM.getChallenge(foundWidevinePssh);
                             }
-                            if (jsonContainsValue(jsonBody, "PD94")) {
+                            if (jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) {
                                 const { security_level, host, secret, device_name } =
                                     playreadyDeviceInfo;
                                 remoteCDM = new remotePlayReadyCDM(
@@ -894,7 +918,8 @@ MediaKeySession.prototype.update = function (response) {
                     const buffer = body instanceof Uint8Array ? body : new Uint8Array(body);
                     const base64Body = window.btoa(String.fromCharCode(...buffer));
                     if (
-                        (base64Body.startsWith("CAES") || base64Body.startsWith("PD94")) &&
+                        (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE) ||
+                            base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
                         (!remoteCDM ||
                             remoteCDM.challenge === null ||
                             base64Body !== remoteCDM.challenge) &&
@@ -906,14 +931,15 @@ MediaKeySession.prototype.update = function (response) {
                         return;
                     }
                     if (
-                        (base64Body.startsWith("CAES") || base64Body.startsWith("PD94")) &&
+                        (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE) ||
+                            base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
                         interceptType == "LICENSE" &&
                         !foundChallengeInBody
                     ) {
                         foundChallengeInBody = true;
                         window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
                         if (!remoteCDM) {
-                            if (base64Body.startsWith("CAES")) {
+                            if (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE)) {
                                 const {
                                     device_type,
                                     system_id,
@@ -933,7 +959,7 @@ MediaKeySession.prototype.update = function (response) {
                                 remoteCDM.openSession();
                                 remoteCDM.getChallenge(foundWidevinePssh);
                             }
-                            if (base64Body.startsWith("PD94")) {
+                            if (base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) {
                                 const { security_level, host, secret, device_name } =
                                     playreadyDeviceInfo;
                                 remoteCDM = new remotePlayReadyCDM(
@@ -957,8 +983,8 @@ MediaKeySession.prototype.update = function (response) {
                 if (typeof body === "string" && !isJson(body)) {
                     const base64EncodedBody = btoa(body);
                     if (
-                        (base64EncodedBody.startsWith("CAES") ||
-                            base64EncodedBody.startsWith("PD94")) &&
+                        (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE) ||
+                            base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
                         (!remoteCDM ||
                             remoteCDM.challenge === null ||
                             base64EncodedBody !== remoteCDM.challenge) &&
@@ -970,15 +996,15 @@ MediaKeySession.prototype.update = function (response) {
                         return;
                     }
                     if (
-                        (base64EncodedBody.startsWith("CAES") ||
-                            base64EncodedBody.startsWith("PD94")) &&
+                        (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE) ||
+                            base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) &&
                         interceptType == "LICENSE" &&
                         !foundChallengeInBody
                     ) {
                         foundChallengeInBody = true;
                         window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
                         if (!remoteCDM) {
-                            if (base64EncodedBody.startsWith("CAES")) {
+                            if (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE)) {
                                 const {
                                     device_type,
                                     system_id,
@@ -998,7 +1024,7 @@ MediaKeySession.prototype.update = function (response) {
                                 remoteCDM.openSession();
                                 remoteCDM.getChallenge(foundWidevinePssh);
                             }
-                            if (base64EncodedBody.startsWith("PD94")) {
+                            if (base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) {
                                 const { security_level, host, secret, device_name } =
                                     playreadyDeviceInfo;
                                 remoteCDM = new remotePlayReadyCDM(
@@ -1023,8 +1049,8 @@ MediaKeySession.prototype.update = function (response) {
                     const jsonBody = JSON.parse(body);
 
                     if (
-                        (jsonContainsValue(jsonBody, "CAES") ||
-                            jsonContainsValue(jsonBody, "PD94")) &&
+                        (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE) ||
+                            jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) &&
                         (!remoteCDM || remoteCDM.challenge === null) &&
                         interceptType === "EME"
                     ) {
@@ -1035,15 +1061,15 @@ MediaKeySession.prototype.update = function (response) {
                     }
 
                     if (
-                        (jsonContainsValue(jsonBody, "CAES") ||
-                            jsonContainsValue(jsonBody, "PD94")) &&
+                        (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE) ||
+                            jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) &&
                         interceptType === "LICENSE" &&
                         !foundChallengeInBody
                     ) {
                         foundChallengeInBody = true;
                         window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
                         if (!remoteCDM) {
-                            if (jsonContainsValue(jsonBody, "CAES")) {
+                            if (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE)) {
                                 const {
                                     device_type,
                                     system_id,
@@ -1063,7 +1089,7 @@ MediaKeySession.prototype.update = function (response) {
                                 remoteCDM.openSession();
                                 remoteCDM.getChallenge(foundWidevinePssh);
                             }
-                            if (jsonContainsValue(jsonBody, "PD94")) {
+                            if (jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) {
                                 const { security_level, host, secret, device_name } =
                                     playreadyDeviceInfo;
                                 remoteCDM = new remotePlayReadyCDM(
