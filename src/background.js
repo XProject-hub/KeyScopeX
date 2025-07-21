@@ -32,7 +32,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.storage.local.set({ licenseURL: data });
             break;
 
-        case "MANIFEST_URL_FOUND":
+        case "MANIFEST_URL":
             console.log("Storing Manifest URL:", data);
             chrome.storage.local.set({ manifestURL: data });
             break;
