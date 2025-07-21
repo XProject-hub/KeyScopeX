@@ -68,19 +68,6 @@ window.addEventListener("message", function (event) {
     }
 
     // Manifest header and URL
-    const EXTENSION_PREFIX = "[CDRM EXTENSION]";
-    const PREFIX_COLOR = "black";
-    const PREFIX_BACKGROUND_COLOR = "yellow";
-    const logWithPrefix = (...args) => {
-        const style = `color: ${PREFIX_COLOR}; background: ${PREFIX_BACKGROUND_COLOR}; font-weight: bold; padding: 2px 4px; border-radius: 2px;`;
-        if (typeof args[0] === "string") {
-            // If the first arg is a string, prepend the prefix
-            console.log(`%c${EXTENSION_PREFIX}%c ${args[0]}`, style, "", ...args.slice(1));
-        } else {
-            // If not, just log the prefix and the rest
-            console.log(`%c${EXTENSION_PREFIX}`, style, ...args);
-        }
-    };
 
     const seenManifestUrls = new Set();
 
@@ -88,17 +75,17 @@ window.addEventListener("message", function (event) {
         const url = event.data.data;
         if (seenManifestUrls.has(url)) return;
         seenManifestUrls.add(url);
-        logWithPrefix("✅ [Content] Unique manifest URL:", url);
+        console.log("[CDRM-Extension] ✅ [content.js] Unique manifest URL:", url);
 
         chrome.runtime.sendMessage({
-            type: "MANIFEST_URL",
+            type: "MANIFEST_URL_FOUND",
             data: url,
         });
     }
 
     if (event.data?.type === "__MANIFEST_HEADERS__") {
         const { url, headers } = event.data;
-        logWithPrefix("[Content.js] Manifest Headers:", url, headers);
+        console.log("[CDRM-Extension] [content.js] Manifest headers:", url, headers);
 
         chrome.runtime.sendMessage({
             type: "MANIFEST_HEADERS",
