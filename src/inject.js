@@ -537,27 +537,32 @@ function postDRMTypeAndPssh(type, pssh) {
     window.postMessage({ type: "__PSSH_DATA__", data: pssh }, "*");
 }
 
+function createAndOpenRemoteCDM(type, deviceInfo, pssh) {
+    let cdm;
+    if (type === "Widevine") {
+        const { device_type, system_id, security_level, host, secret, device_name } = deviceInfo;
+        cdm = new remoteWidevineCDM(
+            device_type,
+            system_id,
+            security_level,
+            host,
+            secret,
+            device_name
+        );
+        cdm.openSession();
+        cdm.getChallenge(pssh);
+    } else if (type === "PlayReady") {
+        const { security_level, host, secret, device_name } = deviceInfo;
+        cdm = new remotePlayReadyCDM(security_level, host, secret, device_name);
+        cdm.openSession();
+        cdm.getChallenge(pssh);
+    }
+    return cdm;
+}
+
 function ensureRemoteCDM(type, deviceInfo, pssh) {
     if (!remoteCDM) {
-        if (type === "Widevine") {
-            const { device_type, system_id, security_level, host, secret, device_name } =
-                deviceInfo;
-            remoteCDM = new remoteWidevineCDM(
-                device_type,
-                system_id,
-                security_level,
-                host,
-                secret,
-                device_name
-            );
-            remoteCDM.openSession();
-            remoteCDM.getChallenge(pssh);
-        } else if (type === "PlayReady") {
-            const { security_level, host, secret, device_name } = deviceInfo;
-            remoteCDM = new remotePlayReadyCDM(security_level, host, secret, device_name);
-            remoteCDM.openSession();
-            remoteCDM.getChallenge(pssh);
-        }
+        remoteCDM = createAndOpenRemoteCDM(type, deviceInfo, pssh);
     }
 }
 
@@ -589,17 +594,11 @@ MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
                 interceptType !== "DISABLED" &&
                 !serviceCertFound
             ) {
-                const { device_type, system_id, security_level, host, secret, device_name } =
-                    widevineDeviceInfo;
-                remoteCDM = new remoteWidevineCDM(
-                    device_type,
-                    system_id,
-                    security_level,
-                    host,
-                    secret,
-                    device_name
+                remoteCDM = createAndOpenRemoteCDM(
+                    "Widevine",
+                    widevineDeviceInfo,
+                    foundWidevinePssh
                 );
-                remoteCDM.openSession();
             }
             if (
                 !injectionSuccess &&
@@ -751,36 +750,18 @@ MediaKeySession.prototype.update = function (response) {
                         window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
                         if (!remoteCDM) {
                             if (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE)) {
-                                const {
-                                    device_type,
-                                    system_id,
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name,
-                                } = widevineDeviceInfo;
-                                remoteCDM = new remoteWidevineCDM(
-                                    device_type,
-                                    system_id,
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name
+                                remoteCDM = createAndOpenRemoteCDM(
+                                    "Widevine",
+                                    widevineDeviceInfo,
+                                    foundWidevinePssh
                                 );
-                                remoteCDM.openSession();
-                                remoteCDM.getChallenge(foundWidevinePssh);
                             }
                             if (base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) {
-                                const { security_level, host, secret, device_name } =
-                                    playreadyDeviceInfo;
-                                remoteCDM = new remotePlayReadyCDM(
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name
+                                remoteCDM = createAndOpenRemoteCDM(
+                                    "PlayReady",
+                                    playreadyDeviceInfo,
+                                    foundPlayreadyPssh
                                 );
-                                remoteCDM.openSession();
-                                remoteCDM.getChallenge(foundPlayreadyPssh);
                             }
                         }
                         if (remoteCDM && remoteCDM.challenge === null) {
@@ -816,36 +797,18 @@ MediaKeySession.prototype.update = function (response) {
                         window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
                         if (!remoteCDM) {
                             if (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE)) {
-                                const {
-                                    device_type,
-                                    system_id,
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name,
-                                } = widevineDeviceInfo;
-                                remoteCDM = new remoteWidevineCDM(
-                                    device_type,
-                                    system_id,
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name
+                                remoteCDM = createAndOpenRemoteCDM(
+                                    "Widevine",
+                                    widevineDeviceInfo,
+                                    foundWidevinePssh
                                 );
-                                remoteCDM.openSession();
-                                remoteCDM.getChallenge(foundWidevinePssh);
                             }
                             if (base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) {
-                                const { security_level, host, secret, device_name } =
-                                    playreadyDeviceInfo;
-                                remoteCDM = new remotePlayReadyCDM(
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name
+                                remoteCDM = createAndOpenRemoteCDM(
+                                    "PlayReady",
+                                    playreadyDeviceInfo,
+                                    foundPlayreadyPssh
                                 );
-                                remoteCDM.openSession();
-                                remoteCDM.getChallenge(foundPlayreadyPssh);
                             }
                         }
                         if (remoteCDM && remoteCDM.challenge === null) {
@@ -881,36 +844,18 @@ MediaKeySession.prototype.update = function (response) {
                         window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
                         if (!remoteCDM) {
                             if (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE)) {
-                                const {
-                                    device_type,
-                                    system_id,
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name,
-                                } = widevineDeviceInfo;
-                                remoteCDM = new remoteWidevineCDM(
-                                    device_type,
-                                    system_id,
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name
+                                remoteCDM = createAndOpenRemoteCDM(
+                                    "Widevine",
+                                    widevineDeviceInfo,
+                                    foundWidevinePssh
                                 );
-                                remoteCDM.openSession();
-                                remoteCDM.getChallenge(foundWidevinePssh);
                             }
                             if (jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) {
-                                const { security_level, host, secret, device_name } =
-                                    playreadyDeviceInfo;
-                                remoteCDM = new remotePlayReadyCDM(
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name
+                                remoteCDM = createAndOpenRemoteCDM(
+                                    "PlayReady",
+                                    playreadyDeviceInfo,
+                                    foundPlayreadyPssh
                                 );
-                                remoteCDM.openSession();
-                                remoteCDM.getChallenge(foundPlayreadyPssh);
                             }
                         }
                         if (remoteCDM && remoteCDM.challenge === null) {
@@ -967,36 +912,18 @@ MediaKeySession.prototype.update = function (response) {
                         window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
                         if (!remoteCDM) {
                             if (base64Body.startsWith(DRM_SIGNATURES.WIDEVINE)) {
-                                const {
-                                    device_type,
-                                    system_id,
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name,
-                                } = widevineDeviceInfo;
-                                remoteCDM = new remoteWidevineCDM(
-                                    device_type,
-                                    system_id,
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name
+                                remoteCDM = createAndOpenRemoteCDM(
+                                    "Widevine",
+                                    widevineDeviceInfo,
+                                    foundWidevinePssh
                                 );
-                                remoteCDM.openSession();
-                                remoteCDM.getChallenge(foundWidevinePssh);
                             }
                             if (base64Body.startsWith(DRM_SIGNATURES.PLAYREADY)) {
-                                const { security_level, host, secret, device_name } =
-                                    playreadyDeviceInfo;
-                                remoteCDM = new remotePlayReadyCDM(
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name
+                                remoteCDM = createAndOpenRemoteCDM(
+                                    "PlayReady",
+                                    playreadyDeviceInfo,
+                                    foundPlayreadyPssh
                                 );
-                                remoteCDM.openSession();
-                                remoteCDM.getChallenge(foundPlayreadyPssh);
                             }
                         }
                         if (remoteCDM && remoteCDM.challenge === null) {
@@ -1032,36 +959,18 @@ MediaKeySession.prototype.update = function (response) {
                         window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
                         if (!remoteCDM) {
                             if (base64EncodedBody.startsWith(DRM_SIGNATURES.WIDEVINE)) {
-                                const {
-                                    device_type,
-                                    system_id,
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name,
-                                } = widevineDeviceInfo;
-                                remoteCDM = new remoteWidevineCDM(
-                                    device_type,
-                                    system_id,
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name
+                                remoteCDM = createAndOpenRemoteCDM(
+                                    "Widevine",
+                                    widevineDeviceInfo,
+                                    foundWidevinePssh
                                 );
-                                remoteCDM.openSession();
-                                remoteCDM.getChallenge(foundWidevinePssh);
                             }
                             if (base64EncodedBody.startsWith(DRM_SIGNATURES.PLAYREADY)) {
-                                const { security_level, host, secret, device_name } =
-                                    playreadyDeviceInfo;
-                                remoteCDM = new remotePlayReadyCDM(
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name
+                                remoteCDM = createAndOpenRemoteCDM(
+                                    "PlayReady",
+                                    playreadyDeviceInfo,
+                                    foundPlayreadyPssh
                                 );
-                                remoteCDM.openSession();
-                                remoteCDM.getChallenge(foundPlayreadyPssh);
                             }
                         }
                         if (remoteCDM && remoteCDM.challenge === null) {
@@ -1097,36 +1006,18 @@ MediaKeySession.prototype.update = function (response) {
                         window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
                         if (!remoteCDM) {
                             if (jsonContainsValue(jsonBody, DRM_SIGNATURES.WIDEVINE)) {
-                                const {
-                                    device_type,
-                                    system_id,
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name,
-                                } = widevineDeviceInfo;
-                                remoteCDM = new remoteWidevineCDM(
-                                    device_type,
-                                    system_id,
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name
+                                remoteCDM = createAndOpenRemoteCDM(
+                                    "Widevine",
+                                    widevineDeviceInfo,
+                                    foundWidevinePssh
                                 );
-                                remoteCDM.openSession();
-                                remoteCDM.getChallenge(foundWidevinePssh);
                             }
                             if (jsonContainsValue(jsonBody, DRM_SIGNATURES.PLAYREADY)) {
-                                const { security_level, host, secret, device_name } =
-                                    playreadyDeviceInfo;
-                                remoteCDM = new remotePlayReadyCDM(
-                                    security_level,
-                                    host,
-                                    secret,
-                                    device_name
+                                remoteCDM = createAndOpenRemoteCDM(
+                                    "PlayReady",
+                                    playreadyDeviceInfo,
+                                    foundPlayreadyPssh
                                 );
-                                remoteCDM.openSession();
-                                remoteCDM.getChallenge(foundPlayreadyPssh);
                             }
                         }
                         if (remoteCDM && remoteCDM.challenge === null) {
