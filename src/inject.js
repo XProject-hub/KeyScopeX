@@ -24,6 +24,21 @@ const DRM_SIGNATURES = {
     WIDEVINE_INIT: "CAQ=",
 };
 
+const EXTENSION_PREFIX = "[CDRM EXTENSION]";
+const PREFIX_COLOR = "black";
+const PREFIX_BACKGROUND_COLOR = "yellow";
+
+const logWithPrefix = (...args) => {
+    const style = `color: ${PREFIX_COLOR}; background: ${PREFIX_BACKGROUND_COLOR}; font-weight: bold; padding: 2px 4px; border-radius: 2px;`;
+    if (typeof args[0] === "string") {
+        // If the first arg is a string, prepend the prefix
+        console.log(`%c${EXTENSION_PREFIX}%c ${args[0]}`, style, "", ...args.slice(1));
+    } else {
+        // If not, just log the prefix and the rest
+        console.log(`%c${EXTENSION_PREFIX}`, style, ...args);
+    }
+};
+
 // Post message to content.js to get DRM override
 window.postMessage({ type: "__GET_DRM_OVERRIDE__" }, "*");
 
@@ -32,7 +47,7 @@ window.addEventListener("message", function (event) {
     if (event.source !== window) return;
     if (event.data.type === "__DRM_OVERRIDE__") {
         drmOverride = event.data.drmOverride || "DISABLED";
-        console.log("DRM Override set to:", drmOverride);
+        logWithPrefix("DRM Override set to:", drmOverride);
     }
 });
 
@@ -45,7 +60,7 @@ window.addEventListener("message", function (event) {
 
     if (event.data.type === "__INJECTION_TYPE__") {
         interceptType = event.data.injectionType || "DISABLED";
-        console.log("Injection type set to:", interceptType);
+        logWithPrefix("Injection type set to:", interceptType);
     }
 });
 
@@ -59,7 +74,7 @@ window.addEventListener("message", function (event) {
     if (event.data.type === "__CDM_DEVICES__") {
         const { widevine_device, playready_device } = event.data;
 
-        console.log("Received device info:", widevine_device, playready_device);
+        logWithPrefix("Received device info:", widevine_device, playready_device);
 
         widevineDeviceInfo = widevine_device;
         playreadyDeviceInfo = playready_device;
@@ -90,7 +105,7 @@ function headersToFlags(headersObj) {
 
 function handleManifestDetection(url, headersObj, contentType, source) {
     window.postMessage({ type: "__MANIFEST_URL__", data: url }, "*");
-    console.log(`[Manifest][${source}]`, url, contentType);
+    logWithPrefix(`[Manifest][${source}]`, url, contentType);
 
     const headerFlags = headersToFlags(headersObj);
 
@@ -209,7 +224,7 @@ class RemoteCDMBase {
         const jsonData = JSON.parse(xhr.responseText);
         if (jsonData.data?.session_id) {
             this.session_id = jsonData.data.session_id;
-            console.log("Session opened:", this.session_id);
+            logWithPrefix("Session opened:", this.session_id);
         } else {
             console.error("Failed to open session:", jsonData.message);
             throw new Error("Failed to open session");
@@ -225,10 +240,10 @@ class RemoteCDMBase {
         const jsonData = JSON.parse(xhr.responseText);
         if (jsonData.data?.challenge) {
             this.challenge = btoa(jsonData.data.challenge);
-            console.log("Challenge received:", this.challenge);
+            logWithPrefix("Challenge received:", this.challenge);
         } else if (jsonData.data?.challenge_b64) {
             this.challenge = jsonData.data.challenge_b64;
-            console.log("Challenge received:", this.challenge);
+            logWithPrefix("Challenge received:", this.challenge);
         } else {
             console.error("Failed to get challenge:", jsonData.message);
             throw new Error("Failed to get challenge");
@@ -243,7 +258,7 @@ class RemoteCDMBase {
         xhr.send(JSON.stringify(body));
         const jsonData = JSON.parse(xhr.responseText);
         if (jsonData.status === 200 || jsonData.message?.includes("parsed and loaded")) {
-            console.log("License response parsed successfully");
+            logWithPrefix("License response parsed successfully");
             return true;
         } else {
             console.error("Failed to parse license response:", jsonData.message);
@@ -260,7 +275,7 @@ class RemoteCDMBase {
         const jsonData = JSON.parse(xhr.responseText);
         if (jsonData.data?.keys) {
             this.keys = jsonData.data.keys;
-            console.log("Keys received:", this.keys);
+            logWithPrefix("Keys received:", this.keys);
         } else {
             console.error("Failed to get keys:", jsonData.message);
             throw new Error("Failed to get keys");
@@ -275,7 +290,7 @@ class RemoteCDMBase {
         xhr.send();
         const jsonData = JSON.parse(xhr.responseText);
         if (jsonData) {
-            console.log("Session closed successfully");
+            logWithPrefix("Session closed successfully");
         } else {
             console.error("Failed to close session:", jsonData.message);
             throw new Error("Failed to close session");
@@ -342,7 +357,7 @@ class remoteWidevineCDM extends RemoteCDMBase {
         xhr.send(JSON.stringify(body));
         const jsonData = JSON.parse(xhr.responseText);
         if (jsonData.status === 200) {
-            console.log("Service certificate set successfully");
+            logWithPrefix("Service certificate set successfully");
         } else {
             console.error("Failed to set service certificate:", jsonData.message);
             throw new Error("Failed to set service certificate");
@@ -363,7 +378,7 @@ class remoteWidevineCDM extends RemoteCDMBase {
         const jsonData = JSON.parse(xhr.responseText);
         if (jsonData.data?.challenge_b64) {
             this.challenge = jsonData.data.challenge_b64;
-            console.log("Widevine challenge received:", this.challenge);
+            logWithPrefix("Widevine challenge received:", this.challenge);
         } else {
             console.error("Failed to get Widevine challenge:", jsonData.message);
             throw new Error("Failed to get Widevine challenge");
@@ -501,30 +516,74 @@ function arrayBufferToBase64(uint8array) {
     return window.btoa(binary);
 }
 
+function bufferToBase64(buffer) {
+    const uint8 = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    return window.btoa(String.fromCharCode(...uint8));
+}
+
+// DRM type detection
+function isWidevine(base64str) {
+    return base64str.startsWith(DRM_SIGNATURES.WIDEVINE);
+}
+function isPlayReady(base64str) {
+    return base64str.startsWith(DRM_SIGNATURES.PLAYREADY);
+}
+function isServiceCertificate(base64str) {
+    return base64str.startsWith(DRM_SIGNATURES.SERVICE_CERT);
+}
+
+function postDRMTypeAndPssh(type, pssh) {
+    window.postMessage({ type: "__DRM_TYPE__", data: type }, "*");
+    window.postMessage({ type: "__PSSH_DATA__", data: pssh }, "*");
+}
+
+function ensureRemoteCDM(type, deviceInfo, pssh) {
+    if (!remoteCDM) {
+        if (type === "Widevine") {
+            const { device_type, system_id, security_level, host, secret, device_name } =
+                deviceInfo;
+            remoteCDM = new remoteWidevineCDM(
+                device_type,
+                system_id,
+                security_level,
+                host,
+                secret,
+                device_name
+            );
+            remoteCDM.openSession();
+            remoteCDM.getChallenge(pssh);
+        } else if (type === "PlayReady") {
+            const { security_level, host, secret, device_name } = deviceInfo;
+            remoteCDM = new remotePlayReadyCDM(security_level, host, secret, device_name);
+            remoteCDM.openSession();
+            remoteCDM.getChallenge(pssh);
+        }
+    }
+}
+
 // Challenge generator interceptor
 const originalGenerateRequest = MediaKeySession.prototype.generateRequest;
 MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
     const session = this;
     let playReadyPssh = getPlayReadyPssh(initData);
     if (playReadyPssh) {
-        console.log("[DRM Detected] PlayReady");
+        logWithPrefix("[DRM Detected] PlayReady");
         foundPlayreadyPssh = playReadyPssh;
-        console.log("[PlayReady PSSH found] " + playReadyPssh);
+        logWithPrefix("[PlayReady PSSH found] " + playReadyPssh);
     }
     let wideVinePssh = getWidevinePssh(initData);
     if (wideVinePssh) {
         // Widevine code
-        console.log("[DRM Detected] Widevine");
+        logWithPrefix("[DRM Detected] Widevine");
         foundWidevinePssh = wideVinePssh;
-        console.log("[Widevine PSSH found] " + wideVinePssh);
+        logWithPrefix("[Widevine PSSH found] " + wideVinePssh);
     }
     // Challenge message interceptor
     if (!remoteListenerMounted) {
         remoteListenerMounted = true;
         session.addEventListener("message", function messageInterceptor(event) {
             event.stopImmediatePropagation();
-            const uint8Array = new Uint8Array(event.message);
-            const base64challenge = arrayBufferToBase64(uint8Array);
+            const base64challenge = bufferToBase64(event.message);
             if (
                 base64challenge === DRM_SIGNATURES.WIDEVINE_INIT &&
                 interceptType !== "DISABLED" &&
@@ -554,27 +613,9 @@ MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
                     originalChallenge = base64challenge;
                 }
                 if (originalChallenge.startsWith(DRM_SIGNATURES.WIDEVINE)) {
-                    window.postMessage({ type: "__DRM_TYPE__", data: "Widevine" }, "*");
-                    window.postMessage({ type: "__PSSH_DATA__", data: foundWidevinePssh }, "*");
-                    if (interceptType === "EME" && !remoteCDM) {
-                        const {
-                            device_type,
-                            system_id,
-                            security_level,
-                            host,
-                            secret,
-                            device_name,
-                        } = widevineDeviceInfo;
-                        remoteCDM = new remoteWidevineCDM(
-                            device_type,
-                            system_id,
-                            security_level,
-                            host,
-                            secret,
-                            device_name
-                        );
-                        remoteCDM.openSession();
-                        remoteCDM.getChallenge(foundWidevinePssh);
+                    postDRMTypeAndPssh("Widevine", foundWidevinePssh);
+                    if (interceptType === "EME") {
+                        ensureRemoteCDM("Widevine", widevineDeviceInfo, foundWidevinePssh);
                     }
                 }
                 if (!originalChallenge.startsWith(DRM_SIGNATURES.WIDEVINE)) {
@@ -585,23 +626,10 @@ MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
                         /<Challenge encoding="base64encoded">([^<]+)<\/Challenge>/
                     );
                     if (match) {
-                        window.postMessage({ type: "__DRM_TYPE__", data: "PlayReady" }, "*");
-                        window.postMessage(
-                            { type: "__PSSH_DATA__", data: foundPlayreadyPssh },
-                            "*"
-                        );
+                        postDRMTypeAndPssh("PlayReady", foundPlayreadyPssh);
                         originalChallenge = match[1];
-                        if (interceptType === "EME" && !remoteCDM) {
-                            const { security_level, host, secret, device_name } =
-                                playreadyDeviceInfo;
-                            remoteCDM = new remotePlayReadyCDM(
-                                security_level,
-                                host,
-                                secret,
-                                device_name
-                            );
-                            remoteCDM.openSession();
-                            remoteCDM.getChallenge(foundPlayreadyPssh);
+                        if (interceptType === "EME") {
+                            ensureRemoteCDM("PlayReady", playreadyDeviceInfo, foundPlayreadyPssh);
                         }
                     }
                 }
@@ -618,12 +646,12 @@ MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
                     Object.defineProperty(syntheticEvent, "message", {
                         get: () => challengeBuffer,
                     });
-                    console.log("Intercepted EME Challenge and injected custom one.");
+                    logWithPrefix("Intercepted EME Challenge and injected custom one.");
                     session.dispatchEvent(syntheticEvent);
                 }
             }
         });
-        console.log("Message interceptor mounted.");
+        logWithPrefix("Message interceptor mounted.");
     }
     return originalGenerateRequest.call(session, initDataType, initData);
 };
@@ -631,8 +659,7 @@ MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
 // Message update interceptors
 const originalUpdate = MediaKeySession.prototype.update;
 MediaKeySession.prototype.update = function (response) {
-    const uint8 = response instanceof Uint8Array ? response : new Uint8Array(response);
-    const base64Response = window.btoa(String.fromCharCode(...uint8));
+    const base64Response = bufferToBase64(response);
     if (
         base64Response.startsWith(DRM_SIGNATURES.SERVICE_CERT) &&
         foundWidevinePssh &&
@@ -667,7 +694,7 @@ MediaKeySession.prototype.update = function (response) {
             .then(() => {
                 let clearKeys = getClearkey(response);
                 if (clearKeys && clearKeys.length > 0) {
-                    console.log("[CLEARKEY] ", clearKeys);
+                    logWithPrefix("[CLEARKEY] ", clearKeys);
                     const drmType = {
                         type: "__DRM_TYPE__",
                         data: "ClearKey",
@@ -681,7 +708,7 @@ MediaKeySession.prototype.update = function (response) {
                 }
             })
             .catch((e) => {
-                console.log("[CLEARKEY] Not found");
+                logWithPrefix("[CLEARKEY] Not found");
             });
     }
 
