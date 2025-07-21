@@ -78,7 +78,7 @@ window.addEventListener("message", function (event) {
         console.log("[CDRM-Extension] ✅ [content.js] Unique manifest URL:", url);
 
         chrome.runtime.sendMessage({
-            type: "MANIFEST_URL_FOUND",
+            type: "MANIFEST_URL",
             data: url,
         });
     }
