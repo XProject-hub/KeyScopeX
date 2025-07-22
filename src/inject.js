@@ -827,6 +827,7 @@ function handleDRMInterception(drmInfo, body, url, setBodyCallback, continueRequ
         const method = (config.method || "GET").toUpperCase();
 
         if (method === "POST" && config.body) {
+            logWithPrefix("[FETCH] Intercepting POST request to:", resource);
             const drmInfo = detectDRMChallenge(config.body);
 
             const result = handleDRMInterception(
@@ -860,6 +861,7 @@ function handleDRMInterception(drmInfo, body, url, setBodyCallback, continueRequ
 
     XMLHttpRequest.prototype.send = function (body) {
         if (this._method && this._method.toUpperCase() === "POST" && body) {
+            logWithPrefix("[XHR] Intercepting POST request to:", this._url);
             const drmInfo = detectDRMChallenge(body);
 
             const result = handleDRMInterception(
