@@ -39,6 +39,47 @@ const logWithPrefix = (...args) => {
     }
 };
 
+function resetDRMState() {
+    logWithPrefix("Resetting DRM state for new manifest...");
+
+    // Reset DRM detection state
+    originalChallenge = null;
+    serviceCertFound = false;
+    drmType = "NONE";
+    psshFound = false;
+    foundWidevinePssh = null;
+    foundPlayreadyPssh = null;
+    drmDecided = null;
+
+    // Reset CDM and session state
+    if (remoteCDM) {
+        try {
+            // Try to close the existing session if it exists
+            if (remoteCDM.session_id) {
+                remoteCDM.closeSession();
+            }
+        } catch (e) {
+            // Ignore errors when closing session
+            logWithPrefix("Error closing previous CDM session:", e.message);
+        }
+        remoteCDM = null;
+    }
+
+    // Reset interceptor state
+    generateRequestCalled = false;
+    remoteListenerMounted = false;
+    injectionSuccess = false;
+    foundChallengeInBody = false;
+    licenseResponseCounter = 0;
+    keysRetrieved = false;
+
+    // Post reset messages to clear UI state
+    window.postMessage({ type: "__DRM_TYPE__", data: "" }, "*");
+    window.postMessage({ type: "__PSSH_DATA__", data: "" }, "*");
+    window.postMessage({ type: "__KEYS_DATA__", data: "" }, "*");
+    window.postMessage({ type: "__LICENSE_URL__", data: "" }, "*");
+}
+
 window.postMessage({ type: "__GET_DRM_OVERRIDE__" }, "*");
 window.postMessage({ type: "__GET_INJECTION_TYPE__" }, "*");
 window.postMessage({ type: "__GET_CDM_DEVICES__" }, "*");
@@ -94,6 +135,9 @@ function headersToFlags(headersObj) {
 }
 
 function handleManifestDetection(url, headersObj, contentType, source) {
+    // Reset DRM state when new manifest is detected
+    resetDRMState();
+
     window.postMessage({ type: "__MANIFEST_URL__", data: url }, "*");
     logWithPrefix(`[Manifest][${source}]`, url, contentType);
 
