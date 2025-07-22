@@ -788,6 +788,37 @@ function handleLicenseMode({
     }
 }
 
+function handleDRMInterception(drmInfo, body, url, setBodyCallback, continueRequestCallback) {
+    // EME mode: block the request if a DRM challenge is detected
+    if (
+        drmInfo.type &&
+        (!remoteCDM || remoteCDM.challenge === null || drmInfo.base64 !== remoteCDM.challenge) &&
+        interceptType === "EME"
+    ) {
+        foundChallengeInBody = true;
+        window.postMessage({ type: "__LICENSE_URL__", data: url }, "*");
+        // Block the request
+        return { shouldBlock: true };
+    }
+
+    // LICENSE mode: replace the challenge in the request
+    if (drmInfo.type && interceptType === "LICENSE" && !foundChallengeInBody) {
+        handleLicenseMode({
+            drmInfo,
+            body,
+            setBody: setBodyCallback,
+            urlOrResource: url,
+            getWidevinePssh: () => foundWidevinePssh,
+            getPlayreadyPssh: () => foundPlayreadyPssh,
+            widevineDeviceInfo,
+            playreadyDeviceInfo,
+        });
+        return { shouldIntercept: true, result: continueRequestCallback() };
+    }
+
+    return { shouldContinue: true };
+}
+
 // fetch POST interceptor
 (function () {
     const originalFetch = window.fetch;
@@ -795,42 +826,21 @@ function handleLicenseMode({
     window.fetch = async function (resource, config = {}) {
         const method = (config.method || "GET").toUpperCase();
 
-        if (method === "POST") {
-            let body = config.body;
-            if (body) {
-                const drmInfo = detectDRMChallenge(body);
+        if (method === "POST" && config.body) {
+            const drmInfo = detectDRMChallenge(config.body);
 
-                // EME mode: block the request if a DRM challenge is detected
-                if (
-                    drmInfo.type &&
-                    (!remoteCDM ||
-                        remoteCDM.challenge === null ||
-                        drmInfo.base64 !== remoteCDM.challenge) &&
-                    interceptType === "EME"
-                ) {
-                    foundChallengeInBody = true;
-                    window.postMessage({ type: "__LICENSE_URL__", data: resource }, "*");
-                    // Block the request
-                    return;
-                }
+            const result = handleDRMInterception(
+                drmInfo,
+                config.body,
+                resource,
+                (b) => {
+                    config.body = b;
+                },
+                () => originalFetch(resource, config)
+            );
 
-                // LICENSE mode: replace the challenge in the request
-                if (drmInfo.type && interceptType === "LICENSE" && !foundChallengeInBody) {
-                    handleLicenseMode({
-                        drmInfo,
-                        body,
-                        setBody: (b) => {
-                            config.body = b;
-                        },
-                        urlOrResource: resource,
-                        getWidevinePssh: () => foundWidevinePssh,
-                        getPlayreadyPssh: () => foundPlayreadyPssh,
-                        widevineDeviceInfo,
-                        playreadyDeviceInfo,
-                    });
-                    return originalFetch(resource, config);
-                }
-            }
+            if (result.shouldBlock) return;
+            if (result.shouldIntercept) return result.result;
         }
 
         return originalFetch(resource, config);
@@ -849,39 +859,21 @@ function handleLicenseMode({
     };
 
     XMLHttpRequest.prototype.send = function (body) {
-        if (this._method && this._method.toUpperCase() === "POST") {
-            if (body) {
-                const drmInfo = detectDRMChallenge(body);
+        if (this._method && this._method.toUpperCase() === "POST" && body) {
+            const drmInfo = detectDRMChallenge(body);
 
-                // EME mode: block the request if a DRM challenge is detected
-                if (
-                    drmInfo.type &&
-                    (!remoteCDM ||
-                        remoteCDM.challenge === null ||
-                        drmInfo.base64 !== remoteCDM.challenge) &&
-                    interceptType === "EME"
-                ) {
-                    foundChallengeInBody = true;
-                    window.postMessage({ type: "__LICENSE_URL__", data: this._url }, "*");
-                    // Block the request
-                    return;
-                }
+            const result = handleDRMInterception(
+                drmInfo,
+                body,
+                this._url,
+                (b) => originalSend.call(this, b),
+                () => {} // XHR doesn't need continuation callback
+            );
 
-                // LICENSE mode: replace the challenge in the request
-                if (drmInfo.type && interceptType === "LICENSE" && !foundChallengeInBody) {
-                    return handleLicenseMode({
-                        drmInfo,
-                        body,
-                        setBody: (b) => originalSend.call(this, b),
-                        urlOrResource: this._url,
-                        getWidevinePssh: () => foundWidevinePssh,
-                        getPlayreadyPssh: () => foundPlayreadyPssh,
-                        widevineDeviceInfo,
-                        playreadyDeviceInfo,
-                    });
-                }
-            }
+            if (result.shouldBlock) return;
+            if (result.shouldIntercept) return result.result;
         }
+
         return originalSend.apply(this, arguments);
     };
 })();
