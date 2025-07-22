@@ -556,23 +556,32 @@ function ensureRemoteCDM(type, deviceInfo, pssh) {
     }
 }
 
+function detectAndStorePssh(initData) {
+    const detections = [
+        {
+            type: "PlayReady",
+            getter: getPlayReadyPssh,
+            store: (pssh) => (foundPlayreadyPssh = pssh),
+        },
+        { type: "Widevine", getter: getWidevinePssh, store: (pssh) => (foundWidevinePssh = pssh) },
+    ];
+
+    detections.forEach(({ type, getter, store }) => {
+        const pssh = getter(initData);
+        if (pssh) {
+            logWithPrefix(`[DRM Detected] ${type}`);
+            store(pssh);
+            logWithPrefix(`[${type} PSSH found] ${pssh}`);
+        }
+    });
+}
+
 // Challenge generator interceptor
 const originalGenerateRequest = MediaKeySession.prototype.generateRequest;
 MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
     const session = this;
-    let playReadyPssh = getPlayReadyPssh(initData);
-    if (playReadyPssh) {
-        logWithPrefix("[DRM Detected] PlayReady");
-        foundPlayreadyPssh = playReadyPssh;
-        logWithPrefix("[PlayReady PSSH found] " + playReadyPssh);
-    }
-    let wideVinePssh = getWidevinePssh(initData);
-    if (wideVinePssh) {
-        // Widevine code
-        logWithPrefix("[DRM Detected] Widevine");
-        foundWidevinePssh = wideVinePssh;
-        logWithPrefix("[Widevine PSSH found] " + wideVinePssh);
-    }
+    detectAndStorePssh(initData);
+
     // Challenge message interceptor
     if (!remoteListenerMounted) {
         remoteListenerMounted = true;
