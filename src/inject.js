@@ -39,46 +39,36 @@ const logWithPrefix = (...args) => {
     }
 };
 
-// Post message to content.js to get DRM override
 window.postMessage({ type: "__GET_DRM_OVERRIDE__" }, "*");
-
-// Add listener for DRM override messages
-window.addEventListener("message", function (event) {
-    if (event.source !== window) return;
-    if (event.data.type === "__DRM_OVERRIDE__") {
-        drmOverride = event.data.drmOverride || "DISABLED";
-        logWithPrefix("DRM Override set to:", drmOverride);
-    }
-});
-
-// Post message to content.js to get injection type
 window.postMessage({ type: "__GET_INJECTION_TYPE__" }, "*");
-
-// Add listener for injection type messages
-window.addEventListener("message", function (event) {
-    if (event.source !== window) return;
-
-    if (event.data.type === "__INJECTION_TYPE__") {
-        interceptType = event.data.injectionType || "DISABLED";
-        logWithPrefix("Injection type set to:", interceptType);
-    }
-});
-
-// Post message to get CDM devices
 window.postMessage({ type: "__GET_CDM_DEVICES__" }, "*");
 
-// Add listener for CDM device messages
-window.addEventListener("message", function (event) {
-    if (event.source !== window) return;
+function createMessageHandler(handlers) {
+    window.addEventListener("message", function (event) {
+        if (event.source !== window) return;
 
-    if (event.data.type === "__CDM_DEVICES__") {
-        const { widevine_device, playready_device } = event.data;
+        const handler = handlers[event.data.type];
+        if (handler) {
+            handler(event.data);
+        }
+    });
+}
 
+createMessageHandler({
+    __DRM_OVERRIDE__: (data) => {
+        drmOverride = data.drmOverride || "DISABLED";
+        logWithPrefix("DRM Override set to:", drmOverride);
+    },
+    __INJECTION_TYPE__: (data) => {
+        interceptType = data.injectionType || "DISABLED";
+        logWithPrefix("Injection type set to:", interceptType);
+    },
+    __CDM_DEVICES__: (data) => {
+        const { widevine_device, playready_device } = data;
         logWithPrefix("Received device info:", widevine_device, playready_device);
-
         widevineDeviceInfo = widevine_device;
         playreadyDeviceInfo = playready_device;
-    }
+    },
 });
 
 function safeHeaderShellEscape(str) {
