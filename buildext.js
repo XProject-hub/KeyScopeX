@@ -1,6 +1,7 @@
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import { minify } from "terser";
 import url from "url";
 import syncVersion from "./syncVersion.js";
 
@@ -25,6 +26,56 @@ const copyDir = async (src, dest) => {
     });
 };
 
+const minifyJS = async (jsContent) => {
+    try {
+        const result = await minify(jsContent, {
+            compress: {
+                drop_console: false, // Keep console logs for debugging
+                drop_debugger: true,
+                pure_funcs: ["console.debug"],
+            },
+            mangle: {
+                reserved: ["chrome"], // Don't mangle chrome API
+            },
+        });
+        return result.code;
+    } catch (error) {
+        console.warn("⚠️ Minification failed, using original:", error.message);
+        return jsContent;
+    }
+};
+
+// Copy and minify JavaScript files from src directory
+const copyAndMinifySrcFiles = async (src, dest) => {
+    await fs.promises.mkdir(dest, { recursive: true });
+
+    const entries = await fs.promises.readdir(src, { withFileTypes: true });
+
+    for (const entry of entries) {
+        const srcPath = path.join(src, entry.name);
+        const destPath = path.join(dest, entry.name);
+
+        if (entry.isDirectory()) {
+            await copyAndMinifySrcFiles(srcPath, destPath);
+        } else if (entry.name.endsWith(".js")) {
+            // Minify JavaScript files
+            console.log(`🗜️ Minifying ${entry.name}...`);
+            const content = await fs.promises.readFile(srcPath, "utf8");
+            const originalSize = Buffer.byteLength(content, "utf8");
+            const minified = await minifyJS(content, entry.name);
+            const minifiedSize = Buffer.byteLength(minified, "utf8");
+            const savings = (((originalSize - minifiedSize) / originalSize) * 100).toFixed(1);
+            console.log(
+                `   📊 ${entry.name}: ${originalSize} → ${minifiedSize} bytes (${savings}% smaller)`
+            );
+            await fs.promises.writeFile(destPath, minified, "utf8");
+        } else {
+            // Copy other files as-is
+            await fs.promises.copyFile(srcPath, destPath);
+        }
+    }
+};
+
 const main = async () => {
     await syncVersion();
 
@@ -47,9 +98,9 @@ const main = async () => {
     }
     await fs.promises.mkdir(releaseDir);
 
-    // 4. Copy src files (manifest, background, etc) to release
-    console.log("📦 Copying src files to extension-release...");
-    await copyDir(srcDir, releaseDir);
+    // 4. Copy and minify src files
+    console.log("📦 Copying and minifying src files...");
+    await copyAndMinifySrcFiles(srcDir, releaseDir);
 
     // 5. Copy frontend dist files to release (merged at root)
     console.log("📦 Copying frontend dist files to extension-release...");

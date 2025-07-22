@@ -32,6 +32,7 @@ To update the version across the entire project, simply change the version numbe
 - Run the build script:
 
 ```bash
+npm install
 npm run buildext
 ```
 
