@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
+import { IoCameraOutline, IoCopyOutline, IoSaveOutline } from "react-icons/io5";
+import { toast } from "sonner";
+import InjectionMenu from "./injectionmenu";
 
-function Results() {
+const Results = () => {
     const [drmType, setDrmType] = useState("");
     const [pssh, setPssh] = useState("");
     const [licenseUrl, setLicenseUrl] = useState("");
@@ -118,6 +121,11 @@ function Results() {
         });
     };
 
+    const handleCopyToClipboard = (text, label) => {
+        navigator.clipboard.writeText(text);
+        toast.success(`Copied ${label} to clipboard`);
+    };
+
     // Check if current tab is YouTube
     const isYouTube = () => {
         return currentTabUrl.includes("youtube.com") || currentTabUrl.includes("youtu.be");
@@ -177,74 +185,137 @@ function Results() {
     };
 
     return (
-        <div className="w-full grow flex h-full overflow-y-auto overflow-x-auto flex-col text-white p-4">
-            <button
-                onClick={handleCapture}
-                className="w-full h-10 bg-sky-500 rounded-md p-2 mt-2 text-white cursor-pointer font-bold hover:bg-sky-600"
-            >
+        <div className="flex h-full w-full flex-col gap-4">
+            <InjectionMenu />
+            <button onClick={handleCapture} className="btn btn-primary">
+                <IoCameraOutline className="h-5 w-5" />
                 Capture current tab
             </button>
 
-            <p className="text-2xl mt-5">DRM Type</p>
-            <input
-                type="text"
-                value={drmType}
-                className="w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 text-white font-mono"
-                placeholder="[Not available]"
-                disabled
-            />
+            <fieldset className="fieldset">
+                <legend className="fieldset-legend text-base">DRM Type</legend>
+                <input
+                    type="text"
+                    value={drmType}
+                    className="input w-full font-mono"
+                    placeholder="[Not available]"
+                    disabled
+                />
+            </fieldset>
 
-            <p className="text-2xl mt-5">Manifest URL</p>
-            <input
-                type="text"
-                value={getManifestDisplayValue()}
-                className={`w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 font-mono ${
-                    isYouTube() && !manifestUrl ? "text-yellow-400" : "text-white"
-                }`}
-                placeholder={getManifestPlaceholder()}
-                disabled
-            />
-
-            <p className="text-2xl mt-5">PSSH</p>
-            <input
-                type="text"
-                value={pssh}
-                className="w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 text-white font-mono"
-                placeholder="[Not available]"
-                disabled
-            />
-
-            <p className="text-2xl mt-5">License URL</p>
-            <input
-                type="text"
-                value={licenseUrl}
-                className="w-full h-10 bg-slate-800/50 rounded-md p-2 mt-2 text-white font-mono"
-                placeholder="[Not available]"
-                disabled
-            />
-
-            <p className="text-2xl mt-5">Keys</p>
-            <div className="w-full min-h-64 h-64 flex items-center justify-center text-center overflow-y-auto bg-slate-800/50 rounded-md p-2 mt-2 text-white whitespace-pre-line font-mono">
-                {Array.isArray(keys) && keys.filter((k) => k.type !== "SIGNING").length > 0 ? (
-                    keys
-                        .filter((k) => k.type !== "SIGNING")
-                        .map((k) => `${k.key_id || k.keyId}:${k.key}`)
-                        .join("\n")
-                ) : (
-                    <span className="text-gray-400">[Not available]</span>
+            <fieldset className="fieldset">
+                <legend className="fieldset-legend text-base">Manifest URL</legend>
+                <input
+                    type="text"
+                    value={getManifestDisplayValue()}
+                    className={`input w-full font-mono ${
+                        isYouTube() && !manifestUrl ? "text-yellow-400" : ""
+                    }`}
+                    placeholder={getManifestPlaceholder()}
+                    disabled
+                />
+                {!isYouTube() && manifestUrl && (
+                    <p className="label flex justify-end">
+                        <button
+                            className="btn btn-link btn-sm text-info"
+                            onClick={() => handleCopyToClipboard(manifestUrl, "manifest URL")}
+                        >
+                            <IoCopyOutline className="h-5 w-5" />
+                            Copy manifest URL
+                        </button>
+                    </p>
                 )}
-            </div>
+            </fieldset>
+
+            <fieldset className="fieldset">
+                <legend className="fieldset-legend text-base">PSSH</legend>
+                <input
+                    type="text"
+                    value={pssh}
+                    className="input w-full font-mono"
+                    placeholder="[Not available]"
+                    disabled
+                />
+                {pssh && (
+                    <p className="label flex justify-end">
+                        <button
+                            className="btn btn-link btn-sm text-info"
+                            onClick={() => handleCopyToClipboard(pssh, "PSSH")}
+                        >
+                            <IoCopyOutline className="h-5 w-5" />
+                            Copy PSSH
+                        </button>
+                    </p>
+                )}
+            </fieldset>
+
+            <fieldset className="fieldset">
+                <legend className="fieldset-legend text-base">License URL</legend>
+                <input
+                    type="text"
+                    value={licenseUrl}
+                    className="input w-full font-mono"
+                    placeholder="[Not available]"
+                    disabled
+                />
+                {licenseUrl && (
+                    <p className="label flex justify-end">
+                        <button
+                            className="btn btn-link btn-sm text-info"
+                            onClick={() => handleCopyToClipboard(licenseUrl, "license URL")}
+                        >
+                            <IoCopyOutline className="h-5 w-5" />
+                            Copy license URL
+                        </button>
+                    </p>
+                )}
+            </fieldset>
+
+            <fieldset className="fieldset">
+                <legend className="fieldset-legend text-base">Keys</legend>
+                <textarea
+                    value={
+                        Array.isArray(keys) && keys.filter((k) => k.type !== "SIGNING").length > 0
+                            ? keys
+                                  .filter((k) => k.type !== "SIGNING")
+                                  .map((k) => `${k.key_id || k.keyId}:${k.key}`)
+                                  .join("\n")
+                            : "[Not available]"
+                    }
+                    className="textarea w-full font-mono"
+                    disabled
+                />
+                {hasData() &&
+                    Array.isArray(keys) &&
+                    keys.filter((k) => k.type !== "SIGNING").length > 0 && (
+                        <p className="label flex justify-end">
+                            <button
+                                className="btn btn-link btn-sm text-info"
+                                onClick={() =>
+                                    handleCopyToClipboard(
+                                        keys
+                                            .filter((k) => k.type !== "SIGNING")
+                                            .map((k) => `${k.key_id || k.keyId}:${k.key}`)
+                                            .join("\n"),
+                                        "keys"
+                                    )
+                                }
+                            >
+                                <IoCopyOutline className="h-5 w-5" />
+                                Copy keys
+                            </button>
+                        </p>
+                    )}
+            </fieldset>
 
             {hasData() && (
-                <button
-                    onClick={handleExportJSON}
-                    className="w-full h-10 bg-green-500 rounded-md p-2 mt-5 text-white cursor-pointer font-bold hover:bg-green-600"
-                >
+                <button onClick={handleExportJSON} className="btn btn-success">
+                    <IoSaveOutline className="h-5 w-5" />
                     Export as JSON
                 </button>
             )}
         </div>
     );
-}
+};
 
 export default Results;

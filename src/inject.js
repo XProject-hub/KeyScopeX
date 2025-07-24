@@ -291,7 +291,12 @@ class RemoteCDMBase {
         xhr.setRequestHeader("Content-Type", "application/json");
         xhr.send(JSON.stringify(body));
         const jsonData = JSON.parse(xhr.responseText);
-        if (xhr.status === 200 || jsonData.status === "Success" || jsonData.message?.includes("parsed and loaded")) {
+        if (
+            xhr.status === 200 ||
+            jsonData.status === "Success" ||
+            jsonData.status === 200 ||
+            jsonData.message?.includes("parsed and loaded")
+        ) {
             logWithPrefix("License response parsed successfully");
             return true;
         } else {
@@ -390,7 +395,7 @@ class remoteWidevineCDM extends RemoteCDMBase {
         };
         xhr.send(JSON.stringify(body));
         const jsonData = JSON.parse(xhr.responseText);
-        if (xhr.status === 200 || jsonData.status === "Success") {
+        if (xhr.status === 200 || jsonData.status === "Success" || jsonData.status === 200) {
             logWithPrefix("Service certificate set successfully");
         } else {
             console.error("Failed to set service certificate:", jsonData.message);

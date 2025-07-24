@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { IoSaveOutline } from "react-icons/io5";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
-function Settings({ onConfigSaved }) {
+const Settings = ({ onConfigSaved }) => {
     const [instanceUrl, setInstanceUrl] = useState("");
     const [storedUrl, setStoredUrl] = useState(null);
-    const [message, setMessage] = useState(null);
-    const [messageType, setMessageType] = useState(null);
     const [loading, setLoading] = useState(false);
 
     const navigate = useNavigate();
@@ -13,6 +13,7 @@ function Settings({ onConfigSaved }) {
     useEffect(() => {
         chrome.storage.local.get("cdrm_instance", (result) => {
             if (chrome.runtime.lastError) {
+                toast.error("Error fetching CDRM instance:", chrome.runtime.lastError);
                 console.error("Error fetching CDRM instance:", chrome.runtime.lastError);
             } else if (result.cdrm_instance) {
                 setStoredUrl(result.cdrm_instance);
@@ -23,14 +24,12 @@ function Settings({ onConfigSaved }) {
     const handleSave = async () => {
         const trimmedUrl = instanceUrl.trim().replace(/\/+$/, "");
         if (!trimmedUrl) {
-            setMessage("Please enter a valid URL.");
-            setMessageType("error");
+            toast.error("Please enter a valid URL.");
             return;
         }
 
         const endpoint = trimmedUrl + "/api/extension";
         setLoading(true);
-        setMessage(null);
 
         try {
             const response = await fetch(endpoint, {
@@ -43,15 +42,24 @@ function Settings({ onConfigSaved }) {
             const data = await response.json();
 
             if (data.status === true) {
-                setMessage("Successfully connected to CDRM Instance.");
-                setMessageType("success");
+                toast.success("Successfully connected to a CDRM instance");
 
                 const widevineRes = await fetch(`${trimmedUrl}/remotecdm/widevine/deviceinfo`);
-                if (!widevineRes.ok) throw new Error("Failed to fetch Widevine device info");
+                if (!widevineRes.ok) {
+                    toast.error(
+                        `Failed to fetch Widevine device info. Reason: ${widevineRes.statusText}`
+                    );
+                    return;
+                }
                 const widevineData = await widevineRes.json();
 
                 const playreadyRes = await fetch(`${trimmedUrl}/remotecdm/playready/deviceinfo`);
-                if (!playreadyRes.ok) throw new Error("Failed to fetch PlayReady device info");
+                if (!playreadyRes.ok) {
+                    toast.error(
+                        `Failed to fetch PlayReady device info. Reason: ${playreadyRes.statusText}`
+                    );
+                    return;
+                }
                 const playreadyData = await playreadyRes.json();
 
                 chrome.storage.local.set(
@@ -79,10 +87,11 @@ function Settings({ onConfigSaved }) {
                                 "Error saving to chrome.storage:",
                                 chrome.runtime.lastError
                             );
-                            setMessage("Error saving configuration.");
-                            setMessageType("error");
+                            toast.error(
+                                `Error saving configuration. Reason: ${chrome.runtime.lastError}`
+                            );
                         } else {
-                            console.log("Configuration saved.");
+                            console.log("Configuration saved");
                             setStoredUrl(trimmedUrl);
                             setInstanceUrl("");
                             if (onConfigSaved) onConfigSaved();
@@ -91,54 +100,56 @@ function Settings({ onConfigSaved }) {
                     }
                 );
             } else {
-                throw new Error("Invalid response from endpoint.");
+                toast.error("Invalid response from endpoint.");
             }
         } catch (err) {
             console.error("Connection error:", err);
-            setMessage("Invalid endpoint or device info could not be retrieved.");
-            setMessageType("error");
+            toast.error(
+                `Invalid endpoint or device info could not be retrieved. Reason: ${err.message}`
+            );
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="w-full h-full overflow-y-auto overflow-x-auto flex flex-col p-4">
+        <div className="flex h-full w-full flex-col gap-4">
             {storedUrl && (
-                <p className="text-gray-300 mb-2">
-                    Current instance: <span className="text-white font-semibold">{storedUrl}</span>
+                <p className="mb-2 text-base">
+                    Current instance: <span className="font-mono font-semibold">{storedUrl}</span>
                 </p>
             )}
 
-            <p className="mt-3 text-white">New instance URL:</p>
-            <input
-                type="text"
-                value={instanceUrl}
-                onChange={(e) => setInstanceUrl(e.target.value)}
-                placeholder="https://cdrm-project.com/, http://127.0.0.1:5000/"
-                className="w-full p-4 text-lg bg-gray-800 text-white border border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mt-4 font-mono"
-            />
+            <fieldset className="fieldset">
+                <legend className="fieldset-legend text-base">New instance URL</legend>
+                <input
+                    type="text"
+                    value={instanceUrl}
+                    onChange={(e) => setInstanceUrl(e.target.value)}
+                    placeholder="https://cdrm-project.com/, http://127.0.0.1:5000/"
+                    className="input w-full font-mono"
+                />
+            </fieldset>
+
             <button
+                type="button"
                 onClick={handleSave}
                 disabled={loading}
-                className={`mt-4 p-2 font-bold ${
-                    loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
-                } text-white rounded-md transition duration-300`}
+                className="btn btn-primary btn-block"
             >
-                {loading ? "Connecting..." : "Save settings"}
+                {loading ? (
+                    <>
+                        <span className="loading loading-spinner loading-sm"></span> Connecting...
+                    </>
+                ) : (
+                    <>
+                        <IoSaveOutline className="h-5 w-5" />
+                        Save settings
+                    </>
+                )}
             </button>
-
-            {message && (
-                <p
-                    className={`mt-2 text-sm text-center ${
-                        messageType === "success" ? "text-green-400" : "text-red-400"
-                    }`}
-                >
-                    {message}
-                </p>
-            )}
         </div>
     );
-}
+};
 
 export default Settings;

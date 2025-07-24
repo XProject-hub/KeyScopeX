@@ -1,10 +1,35 @@
 @import "tailwindcss";
+@plugin "daisyui";
+
+@plugin "daisyui/theme" {
+    name: "dim";
+    default: true;
+    prefersdark: true;
+    color-scheme: "dark";
+    --radius-selector: 0.5rem;
+    --radius-field: 0.5rem;
+    --radius-box: 0.5rem;
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --depth: 0;
+    --noise: 0;
+}
+
+:root {
+    --font-default-sans:
+        "Inter", system-ui, -apple-system, Roboto, "Segoe UI", "Helvetica Neue", "Noto Sans",
+        Oxygen, Ubuntu, Cantarell, "Open Sans", Arial, sans-serif;
+    font-family: var(--font-default-sans);
+}
+
+/* Force Sonner toast to use Inter first */
+[data-sonner-toast],
+.sonner-toast,
+:where([data-sonner-toast]) :where([data-title]) :where([data-description]) {
+    font-family: var(--font-default-sans) !important;
+}
 
 html,
-body,
-#root {
-    height: 100%;
-    width: 100%;
-    margin: 0;
-    padding: 0;
+body {
+    font-family: var(--font-default-sans);
 }
