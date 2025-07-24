@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "CDRM Extension",
-    "version": "2.1.0",
+    "version": "3.0",
     "description": "Decrypt DRM protected content",
     "permissions": ["storage", "activeTab", "contextMenus"],
     "host_permissions": ["<all_urls>"],
