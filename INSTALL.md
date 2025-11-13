@@ -157,9 +157,11 @@ chmod +x install-ubuntu.sh
 
 ## 💡 Need Help?
 
+- 🌐 Website: https://keyscopex.xproject.live
 - 📧 GitHub Issues: https://github.com/XProject-hub/KeyScopeX/issues
 - 💬 Discord: Join our community
 - 📖 Documentation: Check README.md
+- 🖥️ Server: 23.95.75.174
 
 ---
 

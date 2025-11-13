@@ -141,8 +141,10 @@ ls -la extension-release/
 
 ## 📦 Repository Info
 
+- **Website**: https://keyscopex.xproject.live
 - **GitHub**: https://github.com/XProject-hub/KeyScopeX
 - **Clone URL**: `https://github.com/XProject-hub/KeyScopeX.git`
+- **Server IP**: 23.95.75.174
 - **Version**: 1.0.0
 - **License**: ISC
 

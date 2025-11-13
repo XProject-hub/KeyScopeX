@@ -5,9 +5,10 @@
   
   **Advanced DRM key extraction and decryption tool by LineWatchX Project**
   
-  [![Version](https://img.shields.io/badge/version-1.0.0-orange.svg)](https://github.com/linewatchx/keyscopex)
+  [![Version](https://img.shields.io/badge/version-1.0.0-orange.svg)](https://github.com/XProject-hub/KeyScopeX)
   [![License](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
   [![Chrome](https://img.shields.io/badge/chrome-extension-brightgreen.svg)](https://developer.chrome.com/docs/extensions/)
+  [![Website](https://img.shields.io/badge/website-keyscopex.xproject.live-orange.svg)](https://keyscopex.xproject.live)
 </div>
 
 ---
@@ -37,8 +38,8 @@
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/linewatchx/keyscopex
-cd keyscopex
+git clone https://github.com/XProject-hub/KeyScopeX.git
+cd KeyScopeX
 ```
 
 ### 2. Install dependencies
@@ -149,8 +150,10 @@ Users are responsible for ensuring their use complies with applicable laws and r
 
 ## 🤝 Support & Community
 
-- **GitHub**: [github.com/linewatchx](https://github.com/linewatchx)
-- **Discord**: [Join our community](https://discord.gg/linewatchx)
+- **Website**: [keyscopex.xproject.live](https://keyscopex.xproject.live)
+- **GitHub**: [github.com/XProject-hub/KeyScopeX](https://github.com/XProject-hub/KeyScopeX)
+- **Server**: 23.95.75.174
+- **Discord**: Join our community
 
 ---
 
