@@ -626,8 +626,10 @@ function detectAndStorePssh(initData) {
 }
 
 // Challenge generator interceptor
-const originalGenerateRequest = MediaKeySession.prototype.generateRequest;
-MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
+// Only hook MediaKeySession if it exists (DRM content pages only)
+if (typeof MediaKeySession !== 'undefined') {
+    const originalGenerateRequest = MediaKeySession.prototype.generateRequest;
+    MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
     const session = this;
     detectAndStorePssh(initData);
 
@@ -701,11 +703,11 @@ MediaKeySession.prototype.generateRequest = function (initDataType, initData) {
         logWithPrefix("Message interceptor mounted.");
     }
     return originalGenerateRequest.call(session, initDataType, initData);
-};
+    };
 
-// Message update interceptors
-const originalUpdate = MediaKeySession.prototype.update;
-MediaKeySession.prototype.update = function (response) {
+    // Message update interceptors
+    const originalUpdate = MediaKeySession.prototype.update;
+    MediaKeySession.prototype.update = function (response) {
     const base64Response = bufferToBase64(response);
     if (
         base64Response.startsWith(DRM_SIGNATURES.SERVICE_CERT) &&
@@ -759,8 +761,11 @@ MediaKeySession.prototype.update = function (response) {
             });
     }
 
-    return updatePromise;
-};
+        return updatePromise;
+    };
+} else {
+    logWithPrefix("MediaKeySession not available (not a DRM-protected page)");
+}
 
 // Helpers
 function detectDRMChallenge(body) {
