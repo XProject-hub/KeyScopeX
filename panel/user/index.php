@@ -16,6 +16,23 @@ if (!isset($_SESSION['user_id'])) {
 $userId = $_SESSION['user_id'];
 $username = $_SESSION['username'];
 $licenseType = $_SESSION['license_type'];
+
+// Get user's license key
+try {
+    $db = getDB();
+    $stmt = $db->prepare("
+        SELECT license_key, license_status, license_expires
+        FROM users 
+        WHERE id = ?
+    ");
+    $stmt->execute([$userId]);
+    $userInfo = $stmt->fetch();
+    $licenseKey = $userInfo['license_key'] ?? '';
+    $licenseStatus = $userInfo['license_status'] ?? 'ACTIVE';
+} catch (Exception $e) {
+    $licenseKey = 'Error loading';
+    $licenseStatus = 'ERROR';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -65,7 +82,7 @@ $licenseType = $_SESSION['license_type'];
                     <div>
                         <p style="color: var(--text-muted); margin-bottom: var(--spacing-sm);">License Key:</p>
                         <p style="font-family: 'Courier New', monospace; font-size: 1.1rem; color: var(--primary); font-weight: 700;" id="licenseKey">
-                            Loading...
+                            <?php echo htmlspecialchars($licenseKey); ?>
                         </p>
                         <button onclick="copyLicenseKey()" class="btn btn-sm btn-primary" style="margin-top: var(--spacing-sm);">
                             Copy License Key
@@ -74,8 +91,8 @@ $licenseType = $_SESSION['license_type'];
                     <div>
                         <p style="color: var(--text-muted); margin-bottom: var(--spacing-sm);">Status:</p>
                         <p style="font-size: 1.1rem;">
-                            <span class="status-indicator status-active"></span>
-                            ACTIVE
+                            <span class="status-indicator status-<?php echo $licenseStatus === 'ACTIVE' ? 'active' : 'inactive'; ?>"></span>
+                            <?php echo htmlspecialchars($licenseStatus); ?>
                         </p>
                         <?php if ($licenseType === 'FREE'): ?>
                         <div style="margin-top: var(--spacing-lg);">
@@ -210,8 +227,12 @@ $licenseType = $_SESSION['license_type'];
         }
 
         function copyLicenseKey() {
-            // In production, this would copy the actual license key
-            alert('License key copy functionality - integrate with API');
+            const licenseKey = document.getElementById('licenseKey').textContent.trim();
+            navigator.clipboard.writeText(licenseKey).then(() => {
+                alert('✅ License key copied to clipboard!');
+            }).catch(err => {
+                alert('Failed to copy license key');
+            });
         }
 
         // Load data on page load
