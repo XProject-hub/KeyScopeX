@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { IoCameraOutline, IoCopyOutline, IoSaveOutline } from "react-icons/io5";
+import { IoCameraOutline, IoCopyOutline, IoSaveOutline, IoCheckmarkCircle } from "react-icons/io5";
 import { toast } from "sonner";
 import InjectionMenu from "./injectionmenu";
 
@@ -10,6 +10,7 @@ const Results = () => {
     const [keys, setKeys] = useState([]);
     const [manifestUrl, setManifestUrl] = useState("");
     const [currentTabUrl, setCurrentTabUrl] = useState("");
+    const [isCapturing, setIsCapturing] = useState(false);
 
     useEffect(() => {
         chrome.storage.local.get(
@@ -71,6 +72,11 @@ const Results = () => {
                 }
                 if (changes.latestKeys) {
                     setKeys(changes.latestKeys.newValue || []);
+                    if (changes.latestKeys.newValue && changes.latestKeys.newValue.length > 0) {
+                        toast.success("Keys extracted successfully!", {
+                            icon: <IoCheckmarkCircle className="text-success" />,
+                        });
+                    }
                 }
             }
         };
@@ -80,6 +86,8 @@ const Results = () => {
     }, []);
 
     const handleCapture = () => {
+        setIsCapturing(true);
+        
         // Reset stored values
         chrome.storage.local.set({
             drmType: "",
@@ -89,10 +97,16 @@ const Results = () => {
             latestKeys: [],
         });
 
+        // Show capturing toast
+        toast.loading("Capturing DRM data from current tab...", { id: "capture-toast" });
+
         // Get all normal windows to exclude your popup
         chrome.windows.getAll({ populate: true, windowTypes: ["normal"] }, (windows) => {
             if (!windows || windows.length === 0) {
                 console.warn("No normal Chrome windows found");
+                toast.dismiss("capture-toast");
+                toast.error("No browser windows found");
+                setIsCapturing(false);
                 return;
             }
 
@@ -101,6 +115,9 @@ const Results = () => {
 
             if (!lastFocusedWindow) {
                 console.warn("No focused normal window found");
+                toast.dismiss("capture-toast");
+                toast.error("No active window found");
+                setIsCapturing(false);
                 return;
             }
 
@@ -113,17 +130,31 @@ const Results = () => {
                 chrome.tabs.reload(activeTab.id, () => {
                     if (chrome.runtime.lastError) {
                         console.error("Failed to reload tab:", chrome.runtime.lastError);
+                        toast.dismiss("capture-toast");
+                        toast.error("Failed to reload tab");
+                        setIsCapturing(false);
+                    } else {
+                        setTimeout(() => {
+                            toast.dismiss("capture-toast");
+                            toast.info("Page reloaded. Play the video to capture DRM keys.");
+                            setIsCapturing(false);
+                        }, 1000);
                     }
                 });
             } else {
                 console.warn("No active tab found in the last focused normal window");
+                toast.dismiss("capture-toast");
+                toast.error("No active webpage found");
+                setIsCapturing(false);
             }
         });
     };
 
     const handleCopyToClipboard = (text, label) => {
         navigator.clipboard.writeText(text);
-        toast.success(`Copied ${label} to clipboard`);
+        toast.success(`Copied ${label} to clipboard`, {
+            icon: <IoCopyOutline className="text-info" />,
+        });
     };
 
     // Check if current tab is YouTube
@@ -168,6 +199,7 @@ const Results = () => {
                           .map((k) => `${k.key_id || k.keyId}:${k.key}`)
                     : null,
             exportedAt: new Date().toISOString(),
+            exportedBy: "KeyScopeX - LineWatchX Project",
         };
 
         const blob = new Blob([JSON.stringify(exportData, null, 2)], {
@@ -177,26 +209,55 @@ const Results = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `drm-data-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
+        a.download = `keyscopex-drm-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        
+        toast.success("DRM data exported successfully!", {
+            icon: <IoSaveOutline className="text-success" />,
+        });
     };
 
     return (
         <div className="flex h-full w-full flex-col gap-4">
             <InjectionMenu />
-            <button onClick={handleCapture} className="btn btn-primary">
-                <IoCameraOutline className="h-5 w-5" />
-                Capture current tab
+            
+            <button 
+                onClick={handleCapture} 
+                className="btn btn-primary pulse-orange"
+                disabled={isCapturing}
+            >
+                {isCapturing ? (
+                    <>
+                        <span className="loading loading-spinner loading-sm"></span>
+                        Capturing...
+                    </>
+                ) : (
+                    <>
+                        <IoCameraOutline className="h-5 w-5" />
+                        Capture Current Tab
+                    </>
+                )}
             </button>
 
+            {/* Status Indicator */}
+            {hasData() && (
+                <div className="alert bg-success/20 border-success/50">
+                    <IoCheckmarkCircle className="h-6 w-6 text-success" />
+                    <span className="text-success font-semibold">DRM Keys Successfully Extracted!</span>
+                </div>
+            )}
+
             <fieldset className="fieldset">
-                <legend className="fieldset-legend text-base">DRM Type</legend>
+                <legend className="fieldset-legend text-base">
+                    <span className="status-indicator status-online"></span>
+                    DRM Type
+                </legend>
                 <input
                     type="text"
-                    value={drmType}
+                    value={drmType || "[Waiting for capture...]"}
                     className="input w-full font-mono"
                     placeholder="[Not available]"
                     disabled
@@ -209,7 +270,7 @@ const Results = () => {
                     type="text"
                     value={getManifestDisplayValue()}
                     className={`input w-full font-mono ${
-                        isYouTube() && !manifestUrl ? "text-yellow-400" : ""
+                        isYouTube() && !manifestUrl ? "text-warning" : ""
                     }`}
                     placeholder={getManifestPlaceholder()}
                     disabled
@@ -221,18 +282,18 @@ const Results = () => {
                             onClick={() => handleCopyToClipboard(manifestUrl, "manifest URL")}
                         >
                             <IoCopyOutline className="h-5 w-5" />
-                            Copy manifest URL
+                            Copy Manifest URL
                         </button>
                     </p>
                 )}
             </fieldset>
 
             <fieldset className="fieldset">
-                <legend className="fieldset-legend text-base">PSSH</legend>
+                <legend className="fieldset-legend text-base">PSSH (Protection System Specific Header)</legend>
                 <input
                     type="text"
                     value={pssh}
-                    className="input w-full font-mono"
+                    className="input w-full font-mono text-sm"
                     placeholder="[Not available]"
                     disabled
                 />
@@ -254,7 +315,7 @@ const Results = () => {
                 <input
                     type="text"
                     value={licenseUrl}
-                    className="input w-full font-mono"
+                    className="input w-full font-mono text-sm"
                     placeholder="[Not available]"
                     disabled
                 />
@@ -265,14 +326,21 @@ const Results = () => {
                             onClick={() => handleCopyToClipboard(licenseUrl, "license URL")}
                         >
                             <IoCopyOutline className="h-5 w-5" />
-                            Copy license URL
+                            Copy License URL
                         </button>
                     </p>
                 )}
             </fieldset>
 
             <fieldset className="fieldset">
-                <legend className="fieldset-legend text-base">Keys</legend>
+                <legend className="fieldset-legend text-base">
+                    Decryption Keys 
+                    {hasData() && (
+                        <span className="ml-2 badge badge-success badge-sm">
+                            {keys.filter((k) => k.type !== "SIGNING").length} keys found
+                        </span>
+                    )}
+                </legend>
                 <textarea
                     value={
                         Array.isArray(keys) && keys.filter((k) => k.type !== "SIGNING").length > 0
@@ -280,9 +348,10 @@ const Results = () => {
                                   .filter((k) => k.type !== "SIGNING")
                                   .map((k) => `${k.key_id || k.keyId}:${k.key}`)
                                   .join("\n")
-                            : "[Not available]"
+                            : "[Keys will appear here after capture...]"
                     }
-                    className="textarea w-full font-mono"
+                    className="textarea w-full font-mono text-sm"
+                    rows="6"
                     disabled
                 />
                 {hasData() &&
@@ -302,14 +371,14 @@ const Results = () => {
                                 }
                             >
                                 <IoCopyOutline className="h-5 w-5" />
-                                Copy keys
+                                Copy All Keys
                             </button>
                         </p>
                     )}
             </fieldset>
 
             {hasData() && (
-                <button onClick={handleExportJSON} className="btn btn-success">
+                <button onClick={handleExportJSON} className="btn btn-success glow-orange">
                     <IoSaveOutline className="h-5 w-5" />
                     Export as JSON
                 </button>

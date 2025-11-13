@@ -5,6 +5,7 @@ import Container from "./components/container";
 import Results from "./components/results";
 import Settings from "./components/settings";
 import TabNavigation from "./components/tabnavigation";
+import keyScopeXLogo from "./assets/keyscopex-logo.png";
 
 const App = () => {
     const [validConfig, setValidConfig] = useState(null);
@@ -34,16 +35,27 @@ const App = () => {
 
     if (validConfig === null) {
         return (
-            <div className="flex h-screen items-center justify-center">
-                <span className="loading loading-spinner loading-md ms-2"></span>
-                Loading...
+            <div className="flex h-screen items-center justify-center bg-base-100">
+                <div className="flex flex-col items-center gap-4">
+                    <span className="loading loading-spinner loading-lg text-primary"></span>
+                    <p className="text-lg text-base-content">Initializing KeyScopeX...</p>
+                </div>
             </div>
         );
     }
 
     return (
         <Router>
-            <div className="flex h-screen flex-col py-4">
+            <div className="flex h-screen flex-col bg-base-100">
+                {/* KeyScopeX Header with Logo */}
+                <div className="ksx-header">
+                    <img 
+                        src={keyScopeXLogo} 
+                        alt="KeyScopeX Logo" 
+                        className="ksx-logo"
+                    />
+                </div>
+
                 <Container>
                     <TabNavigation validConfig={validConfig} />
                     <div className="divider"></div>
@@ -65,6 +77,14 @@ const App = () => {
                             </>
                         )}
                     </Routes>
+
+                    {/* Footer Branding */}
+                    <div className="ksx-footer">
+                        <p>
+                            Powered by <span className="ksx-footer-brand">LineWatchX Project</span> 
+                            {" • "} KeyScopeX Extension v1.0.0
+                        </p>
+                    </div>
                 </Container>
             </div>
         </Router>

@@ -12,36 +12,39 @@ const TabNavigation = ({ validConfig }) => {
               : "main";
 
     return (
-        <div className="mb-4 flex items-center justify-center">
-            <div role="tablist" className="tabs tabs-box">
+        <div className="mb-6 flex items-center justify-center">
+            <div role="tablist" className="tabs tabs-box shadow-lg">
                 <NavLink
                     role="tab"
                     to="/results"
-                    className={`tab ${!validConfig ? "cursor-not-allowed" : activeTab === "main" ? "tab-active font-semibold" : ""}`}
+                    className={`tab gap-2 ${!validConfig ? "cursor-not-allowed opacity-50" : activeTab === "main" ? "tab-active font-semibold" : ""}`}
                     onClick={(e) => {
                         if (!validConfig) {
                             e.preventDefault();
                         }
                     }}
+                    title={!validConfig ? "Configure CDRM instance first" : "View DRM extraction results"}
                 >
-                    <IoHomeOutline className="mr-1 h-5 w-5" />
-                    Main
+                    <IoHomeOutline className="h-5 w-5" />
+                    <span>Main</span>
                 </NavLink>
                 <NavLink
                     role="tab"
                     to="/settings"
-                    className={`tab ${activeTab === "settings" ? "tab-active font-semibold" : ""}`}
+                    className={`tab gap-2 ${activeTab === "settings" ? "tab-active font-semibold" : ""}`}
+                    title="Configure CDRM instance"
                 >
-                    <IoSettingsOutline className="mr-1 h-5 w-5" />
-                    Settings
+                    <IoSettingsOutline className="h-5 w-5" />
+                    <span>Settings</span>
                 </NavLink>
                 <NavLink
                     role="tab"
                     to="/about"
-                    className={`tab ${activeTab === "about" ? "tab-active font-semibold" : ""}`}
+                    className={`tab gap-2 ${activeTab === "about" ? "tab-active font-semibold" : ""}`}
+                    title="About KeyScopeX"
                 >
-                    <IoIosInformationCircleOutline className="mr-1 h-5 w-5" />
-                    About
+                    <IoIosInformationCircleOutline className="h-5 w-5" />
+                    <span>About</span>
                 </NavLink>
             </div>
         </div>

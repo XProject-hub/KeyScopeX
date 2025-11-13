@@ -1,9 +1,18 @@
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import { minify } from "terser";
 import url from "url";
 import syncVersion from "./syncVersion.js";
+
+// Try to import terser, but make it optional
+let minify = null;
+try {
+    const terser = await import("terser");
+    minify = terser.minify;
+    console.log("✓ Terser available for minification");
+} catch (e) {
+    console.log("⚠️  Terser not available, skipping minification");
+}
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const frontendDir = path.join(__dirname, "frontend");
@@ -13,7 +22,7 @@ const iconDir = path.join(__dirname, "icons");
 const releaseDir = path.join(__dirname, "extension-release");
 
 const run = (cmd, cwd) => {
-    console.log(`🛠️ Running: ${cmd}`);
+    console.log(`🛠️  Running: ${cmd}`);
     execSync(cmd, { cwd, stdio: "inherit" });
 };
 
@@ -27,6 +36,10 @@ const copyDir = async (src, dest) => {
 };
 
 const minifyJS = async (jsContent) => {
+    if (!minify) {
+        return jsContent; // Return original if terser not available
+    }
+    
     try {
         const result = await minify(jsContent, {
             compress: {
@@ -40,7 +53,7 @@ const minifyJS = async (jsContent) => {
         });
         return result.code;
     } catch (error) {
-        console.warn("⚠️ Minification failed, using original:", error.message);
+        console.warn("⚠️  Minification failed, using original:", error.message);
         return jsContent;
     }
 };
@@ -57,9 +70,9 @@ const copyAndMinifySrcFiles = async (src, dest) => {
 
         if (entry.isDirectory()) {
             await copyAndMinifySrcFiles(srcPath, destPath);
-        } else if (entry.name.endsWith(".js")) {
-            // Minify JavaScript files
-            console.log(`🗜️ Minifying ${entry.name}...`);
+        } else if (entry.name.endsWith(".js") && minify) {
+            // Minify JavaScript files only if terser is available
+            console.log(`🗜️  Minifying ${entry.name}...`);
             const content = await fs.promises.readFile(srcPath, "utf8");
             const originalSize = Buffer.byteLength(content, "utf8");
             const minified = await minifyJS(content, entry.name);
@@ -79,7 +92,7 @@ const copyAndMinifySrcFiles = async (src, dest) => {
 const main = async () => {
     await syncVersion();
 
-    console.log("🚀 Starting extension build...");
+    console.log("🚀 Starting KeyScopeX extension build...");
 
     // 1. Install frontend deps if needed
     if (!fs.existsSync(path.join(frontendDir, "node_modules"))) {
@@ -99,7 +112,7 @@ const main = async () => {
     await fs.promises.mkdir(releaseDir);
 
     // 4. Copy and minify src files
-    console.log("📦 Copying and minifying src files...");
+    console.log("📦 Copying extension core files...");
     await copyAndMinifySrcFiles(srcDir, releaseDir);
 
     // 5. Copy frontend dist files to release (merged at root)
@@ -107,10 +120,11 @@ const main = async () => {
     await copyDir(distDir, releaseDir);
 
     // 6. Copy icon directory to release (merged at root)
-    console.log("📦 Copying icon directory to extension-release...");
+    console.log("📦 Copying icons to extension-release...");
     await copyDir(iconDir, path.join(releaseDir, "icons"));
 
-    console.log("✅ Build complete! extension-release ready.");
+    console.log("✅ Build complete! KeyScopeX extension-release ready.");
+    console.log(`📁 Location: ${releaseDir}`);
 };
 
 main().catch((e) => {

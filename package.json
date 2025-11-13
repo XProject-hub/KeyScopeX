@@ -1,7 +1,7 @@
 {
-    "name": "cdrm-extension",
-    "version": "3.0",
-    "description": "",
+    "name": "keyscopex-extension",
+    "version": "1.0.0",
+    "description": "KeyScopeX - Advanced DRM Key Extraction Tool by LineWatchX",
     "main": "background.js",
     "scripts": {
         "buildext": "node buildext.js",
@@ -9,7 +9,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://cdm-project.com/tpd94/CDRM-Extension.git"
+        "url": "https://github.com/linewatchx/keyscopex"
     },
     "keywords": [],
     "author": "",
@@ -19,6 +19,6 @@
         "node": ">=21.0.0"
     },
     "devDependencies": {
-        "terser": "^5.43.1"
+        "terser": "^5.44.1"
     }
 }
