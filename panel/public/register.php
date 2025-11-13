@@ -138,7 +138,7 @@ if (isset($_SESSION['user_id'])) {
 
         <div style="text-align: center; margin-top: var(--spacing-lg);">
             <p class="text-muted" style="font-size: 0.875rem;">
-                Made with 🧡 by <span style="color: var(--primary); font-weight: 600;">LineWatchX Project</span>
+                Developed by <span style="color: var(--primary); font-weight: 600;">X Project</span> | Version 1.0.1
             </p>
         </div>
     </div>

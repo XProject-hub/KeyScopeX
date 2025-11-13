@@ -1,7 +1,7 @@
 {
     "name": "keyscopex-extension",
-    "version": "1.0.0",
-    "description": "KeyScopeX - Advanced DRM Key Extraction Tool by LineWatchX",
+    "version": "1.0.1",
+    "description": "KeyScopeX - Advanced DRM Key Extraction Tool by X Project",
     "main": "background.js",
     "scripts": {
         "buildext": "node buildext.js",

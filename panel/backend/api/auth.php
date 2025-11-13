@@ -153,11 +153,11 @@ function handleRegister($input) {
  * User login
  */
 function handleLogin($input) {
-    $email = sanitizeInput($input['email'] ?? '');
+    $identifier = sanitizeInput($input['email'] ?? $input['username'] ?? '');
     $password = $input['password'] ?? '';
     
-    if (empty($email) || empty($password)) {
-        jsonResponse(['success' => false, 'message' => 'Email and password are required'], 400);
+    if (empty($identifier) || empty($password)) {
+        jsonResponse(['success' => false, 'message' => 'Username/Email and password are required'], 400);
     }
     
     // Rate limiting
@@ -168,12 +168,13 @@ function handleLogin($input) {
     try {
         $db = getDB();
         
+        // Check if it's email or username
         $stmt = $db->prepare("
             SELECT id, username, email, password, license_key, license_type, license_status, is_admin
             FROM users
-            WHERE email = ?
+            WHERE email = ? OR username = ?
         ");
-        $stmt->execute([$email]);
+        $stmt->execute([$identifier, $identifier]);
         $user = $stmt->fetch();
         
         if (!$user || !password_verify($password, $user['password'])) {

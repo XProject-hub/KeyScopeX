@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="KeyScopeX - Advanced DRM Key Extraction Tool by LineWatchX Project">
-    <meta name="keywords" content="DRM, Widevine, PlayReady, ClearKey, Key Extraction, LineWatchX">
-    <meta name="author" content="LineWatchX Project">
-    <title>KeyScopeX - DRM Key Extractor | LineWatchX Project</title>
+    <meta name="description" content="KeyScopeX - Advanced DRM Key Extraction Tool by X Project">
+    <meta name="keywords" content="DRM, Widevine, PlayReady, ClearKey, Key Extraction, X Project">
+    <meta name="author" content="X Project">
+    <title>KeyScopeX - DRM Key Extractor | X Project</title>
     <style>
         * {
             margin: 0;
@@ -60,12 +60,6 @@
             display: flex;
             align-items: center;
             gap: 20px;
-        }
-
-        .logo {
-            width: 80px;
-            height: 80px;
-            filter: drop-shadow(0 4px 12px rgba(255, 107, 53, 0.3));
         }
 
         .logo-text h1 {
@@ -287,44 +281,13 @@
             font-weight: 700;
         }
 
-        .social-links {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            margin: 20px 0;
-        }
-
-        .social-links a {
-            color: var(--light-text);
-            font-size: 1.5rem;
-            transition: color 0.3s ease;
-        }
-
-        .social-links a:hover {
-            color: var(--orange);
-        }
-
-        /* Responsive */
         @media (max-width: 768px) {
-            .hero h2 {
-                font-size: 2rem;
-            }
-
-            .hero p {
-                font-size: 1.1rem;
-            }
-
-            .logo-text h1 {
-                font-size: 1.5rem;
-            }
-
-            .nav-btn {
-                padding: 10px 20px;
-                font-size: 0.9rem;
-            }
+            .hero h2 { font-size: 2rem; }
+            .hero p { font-size: 1.1rem; }
+            .logo-text h1 { font-size: 1.5rem; }
+            .nav-btn { padding: 10px 20px; font-size: 0.9rem; }
         }
 
-        /* Animations */
         @keyframes fadeInUp {
             from {
                 opacity: 0;
@@ -360,20 +323,15 @@
         <div class="container">
             <div class="header-content">
                 <div class="logo-section">
-                    <svg class="logo" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="100" cy="100" r="90" fill="#2d3e50" stroke="#e2e8f0" stroke-width="4"/>
-                        <path d="M 100 40 L 110 80 L 150 80 L 120 105 L 135 145 L 100 120 L 65 145 L 80 105 L 50 80 L 90 80 Z" fill="#ff6b35"/>
-                        <circle cx="100" cy="70" r="8" fill="#ff8c61"/>
-                    </svg>
                     <div class="logo-text">
-                        <h1>KeyScopeX</h1>
-                        <p>by LineWatchX Project</p>
+                        <h1>🔑 KeyScopeX</h1>
+                        <p>by X Project</p>
                     </div>
                 </div>
                 <nav>
                     <a href="https://github.com/XProject-hub/KeyScopeX" class="nav-btn" target="_blank">GitHub</a>
-                    <a href="#install" class="nav-btn secondary">Install</a>
-                    <a href="https://github.com/XProject-hub/KeyScopeX/releases" class="nav-btn secondary" target="_blank">Download</a>
+                    <a href="/panel/public/register.php" class="nav-btn secondary">Register</a>
+                    <a href="/panel/public/login.php" class="nav-btn secondary">Login</a>
                 </nav>
             </div>
         </div>
@@ -385,7 +343,7 @@
             <h2>Advanced DRM Key Extraction Tool</h2>
             <p>Extract decryption keys from Widevine, PlayReady, and ClearKey protected content with ease</p>
             <div class="cta-buttons">
-                <a href="#install" class="cta-primary pulse">Get Started</a>
+                <a href="/panel/public/register.php" class="cta-primary pulse">Get Started Free</a>
                 <a href="https://github.com/XProject-hub/KeyScopeX" class="nav-btn secondary" target="_blank">View on GitHub</a>
             </div>
         </div>
@@ -413,8 +371,8 @@
                 </div>
                 <div class="feature-card fade-in-up">
                     <div class="feature-icon">💾</div>
-                    <h4>JSON Export</h4>
-                    <p>Export captured data in JSON format for use with decryption tools</p>
+                    <h4>Auto-Sync to Dashboard</h4>
+                    <p>Keys automatically upload to your personal dashboard</p>
                 </div>
                 <div class="feature-card fade-in-up">
                     <div class="feature-icon">🚀</div>
@@ -422,9 +380,9 @@
                     <p>Built with React, Vite, TailwindCSS for optimal performance</p>
                 </div>
                 <div class="feature-card fade-in-up">
-                    <div class="feature-icon">🛠️</div>
-                    <h4>Developer Friendly</h4>
-                    <p>Easy-to-use API and copy-to-clipboard functionality</p>
+                    <div class="feature-icon">👑</div>
+                    <h4>FREE & PREMIUM</h4>
+                    <p>Start free, upgrade to access global key database</p>
                 </div>
             </div>
         </div>
@@ -433,38 +391,27 @@
     <!-- Installation -->
     <section class="installation" id="install">
         <div class="container">
-            <h3>Installation</h3>
+            <h3>Get Started</h3>
             <div class="install-box">
-                <h4 style="color: var(--orange); margin-bottom: 20px;">⚡ One-Line Installation (Ubuntu 22.04)</h4>
+                <h4 style="color: var(--orange); margin-bottom: 20px;">⚡ Quick Start</h4>
                 <div class="code-block">
                     <code>git clone https://github.com/XProject-hub/KeyScopeX.git && cd KeyScopeX && chmod +x install-ubuntu.sh && ./install-ubuntu.sh</code>
                 </div>
                 
-                <h4 style="color: var(--orange); margin: 30px 0 20px 0;">📋 Step-by-Step</h4>
-                <div class="code-block">
-                    <code>
-# Clone the repository<br>
-git clone https://github.com/XProject-hub/KeyScopeX.git<br>
-<br>
-# Navigate to directory<br>
-cd KeyScopeX<br>
-<br>
-# Make installer executable<br>
-chmod +x install-ubuntu.sh<br>
-<br>
-# Run installer<br>
-./install-ubuntu.sh
-                    </code>
-                </div>
-
-                <h4 style="color: var(--orange); margin: 30px 0 20px 0;">🌐 Load in Browser</h4>
-                <ol style="color: var(--gray-text); margin-left: 20px;">
-                    <li>Open Chrome/Edge → <code style="color: var(--orange);">chrome://extensions/</code></li>
-                    <li>Enable <strong>Developer mode</strong></li>
-                    <li>Click <strong>Load unpacked</strong></li>
-                    <li>Select the <code style="color: var(--orange);">extension-release/</code> folder</li>
+                <h4 style="color: var(--orange); margin: 30px 0 20px 0;">🌐 Or Use Web Panel</h4>
+                <ol style="color: var(--gray-text); margin-left: 20px; line-height: 2;">
+                    <li><a href="/panel/public/register.php" style="color: var(--orange); font-weight: 600;">Register for FREE account</a></li>
+                    <li>Get your license key instantly</li>
+                    <li>Install the extension</li>
+                    <li>Enter license key in extension settings</li>
                     <li>Start capturing keys! 🔑</li>
                 </ol>
+                
+                <div style="margin-top: 30px; text-align: center;">
+                    <a href="/panel/public/register.php" class="cta-primary" style="font-size: 1rem; padding: 14px 30px;">
+                        Register Now - It's FREE!
+                    </a>
+                </div>
             </div>
         </div>
     </section>
@@ -474,7 +421,7 @@ chmod +x install-ubuntu.sh<br>
         <div class="container">
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-number">v1.0.0</div>
+                    <div class="stat-number">v1.0.1</div>
                     <div class="stat-label">Latest Version</div>
                 </div>
                 <div class="stat-card">
@@ -496,29 +443,23 @@ chmod +x install-ubuntu.sh<br>
     <!-- Footer -->
     <footer>
         <div class="container">
-            <div class="social-links">
-                <a href="https://github.com/XProject-hub/KeyScopeX" target="_blank" title="GitHub">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                    </svg>
-                </a>
-            </div>
-            <p><strong class="footer-brand">KeyScopeX</strong> v1.0.0</p>
+            <p><strong class="footer-brand">KeyScopeX</strong> v1.0.1</p>
             <p>Advanced DRM Key Extraction Tool</p>
-            <p style="margin-top: 20px;">Made with 🧡 by <span class="footer-brand">LineWatchX Project</span></p>
+            <p style="margin-top: 20px;">Developed by <span class="footer-brand">X Project</span> | Version 1.0.1</p>
             <p style="margin-top: 10px; font-size: 0.9rem;">
                 <a href="https://keyscopex.xproject.live" style="color: var(--orange);">keyscopex.xproject.live</a> • 
-                <a href="https://github.com/XProject-hub/KeyScopeX" style="color: var(--orange);">GitHub</a>
+                <a href="https://github.com/XProject-hub/KeyScopeX" style="color: var(--orange);">GitHub</a> •
+                <a href="/panel/public/register.php" style="color: var(--orange);">Register</a> •
+                <a href="/panel/public/login.php" style="color: var(--orange);">Login</a>
             </p>
             <p style="margin-top: 20px; font-size: 0.8rem; color: var(--gray-text);">
                 ⚠️ Educational and research purposes only. Users are responsible for compliance with applicable laws.
             </p>
-            <p style="margin-top: 10px; font-size: 0.8rem;">© 2024 LineWatchX Project. All rights reserved.</p>
+            <p style="margin-top: 10px; font-size: 0.8rem;">© 2024 X Project. All rights reserved.</p>
         </div>
     </footer>
 
     <script>
-        // Smooth scrolling for anchor links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
                 e.preventDefault();
@@ -532,7 +473,6 @@ chmod +x install-ubuntu.sh<br>
             });
         });
 
-        // Fade in animations on scroll
         const observerOptions = {
             threshold: 0.1,
             rootMargin: '0px 0px -50px 0px'
@@ -556,4 +496,3 @@ chmod +x install-ubuntu.sh<br>
     </script>
 </body>
 </html>
-

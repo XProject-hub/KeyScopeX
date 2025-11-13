@@ -129,7 +129,7 @@ try {
     </div>
 
     <footer class="footer">
-        <p>Made with 🧡 by <span class="footer-brand">LineWatchX Project</span></p>
+        <p>Developed by <span class="footer-brand">X Project</span> | Version 1.0.1</p>
     </footer>
 
     <script>

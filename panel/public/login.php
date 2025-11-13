@@ -68,8 +68,8 @@ if (isset($_SESSION['user_id'])) {
 
             <form id="loginForm">
                 <div class="form-group">
-                    <label class="form-label">Email Address</label>
-                    <input type="email" id="email" name="email" class="form-input" placeholder="your@email.com" required>
+                    <label class="form-label">Username or Email</label>
+                    <input type="text" id="email" name="email" class="form-input" placeholder="admin or your@email.com" required>
                 </div>
 
                 <div class="form-group">
@@ -90,7 +90,7 @@ if (isset($_SESSION['user_id'])) {
 
         <div style="text-align: center; margin-top: var(--spacing-lg);">
             <p class="text-muted" style="font-size: 0.875rem;">
-                Made with 🧡 by <span style="color: var(--primary); font-weight: 600;">LineWatchX Project</span>
+                Developed by <span style="color: var(--primary); font-weight: 600;">X Project</span> | Version 1.0.1
             </p>
         </div>
     </div>

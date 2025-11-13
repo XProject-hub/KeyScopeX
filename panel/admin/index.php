@@ -172,8 +172,8 @@ $pageTitle = "Admin Dashboard";
 
     <!-- Footer -->
     <footer class="footer">
-        <p>Made with 🧡 by <span class="footer-brand">LineWatchX Project</span></p>
-        <p>KeyScopeX Panel v1.0.0 • Admin Dashboard</p>
+        <p>Developed by <span class="footer-brand">X Project</span> | Version 1.0.1</p>
+        <p>KeyScopeX Panel • Admin Dashboard</p>
     </footer>
 
     <script>

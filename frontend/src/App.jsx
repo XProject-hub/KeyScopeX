@@ -81,8 +81,7 @@ const App = () => {
                     {/* Footer Branding */}
                     <div className="ksx-footer">
                         <p>
-                            Powered by <span className="ksx-footer-brand">LineWatchX Project</span> 
-                            {" • "} KeyScopeX Extension v1.0.0
+                            Developed by <span className="ksx-footer-brand">X Project</span> | Version 1.0.1
                         </p>
                     </div>
                 </Container>

@@ -158,8 +158,8 @@ $licenseType = $_SESSION['license_type'];
     </div>
 
     <footer class="footer">
-        <p>Made with 🧡 by <span class="footer-brand">LineWatchX Project</span></p>
-        <p>KeyScopeX Panel v1.0.0</p>
+        <p>Developed by <span class="footer-brand">X Project</span> | Version 1.0.1</p>
+        <p>KeyScopeX Panel</p>
     </footer>
 
     <script>

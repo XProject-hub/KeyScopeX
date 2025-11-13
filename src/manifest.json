@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "KeyScopeX - DRM Key Extractor",
-    "version": "1.0.0",
-    "description": "Advanced DRM key extraction and decryption tool by LineWatchX",
+    "version": "1.0.1",
+    "description": "Advanced DRM key extraction and decryption tool by X Project",
     "permissions": ["storage", "activeTab", "contextMenus"],
     "host_permissions": ["<all_urls>"],
     "background": {
