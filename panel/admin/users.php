@@ -93,10 +93,10 @@ $pageTitle = "User Management";
                                 <th>ID</th>
                                 <th>Username</th>
                                 <th>Email</th>
-                                <th>License Type</th>
+                                <th>License Key</th>
+                                <th>Type</th>
                                 <th>Status</th>
                                 <th>Keys</th>
-                                <th>Registered</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -170,6 +170,13 @@ $pageTitle = "User Management";
                     <td><strong>${escapeHtml(user.username)}</strong></td>
                     <td>${escapeHtml(user.email)}</td>
                     <td>
+                        <code style="font-size: 0.85rem; cursor: pointer; user-select: all;" 
+                              onclick="copyLicenseKey('${user.license_key}')" 
+                              title="Click to copy">
+                            ${user.license_key}
+                        </code>
+                    </td>
+                    <td>
                         <span class="badge badge-${user.license_type === 'PREMIUM' ? 'primary' : 'success'}">
                             ${user.license_type}
                         </span>
@@ -179,7 +186,6 @@ $pageTitle = "User Management";
                         ${user.license_status}
                     </td>
                     <td>${user.total_keys || 0}</td>
-                    <td>${formatDate(user.created_at)}</td>
                     <td>
                         <button onclick="viewUser(${user.id})" class="btn btn-sm btn-secondary">View</button>
                         ${user.license_type === 'FREE' ? 
@@ -296,6 +302,15 @@ $pageTitle = "User Management";
             if (!dateString) return 'N/A';
             const date = new Date(dateString);
             return date.toLocaleDateString();
+        }
+
+        function copyLicenseKey(licenseKey) {
+            navigator.clipboard.writeText(licenseKey).then(() => {
+                alert('✅ License key copied: ' + licenseKey);
+            }).catch(err => {
+                // Fallback for older browsers
+                alert('License Key: ' + licenseKey + '\n\nPlease copy manually');
+            });
         }
 
         // Initial load
