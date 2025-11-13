@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { IoCameraOutline, IoCopyOutline, IoSaveOutline, IoCheckmarkCircle } from "react-icons/io5";
+import { IoCameraOutline, IoCopyOutline, IoSaveOutline, IoCheckmarkCircle, IoCloudUploadOutline } from "react-icons/io5";
 import { toast } from "sonner";
 import InjectionMenu from "./injectionmenu";
 
@@ -11,6 +11,11 @@ const Results = () => {
     const [manifestUrl, setManifestUrl] = useState("");
     const [currentTabUrl, setCurrentTabUrl] = useState("");
     const [isCapturing, setIsCapturing] = useState(false);
+    
+    // Panel integration
+    const [panelLicense, setPanelLicense] = useState(null);
+    const [licenseType, setLicenseType] = useState(null);
+    const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
 
     useEffect(() => {
         chrome.storage.local.get(
@@ -21,8 +26,17 @@ const Results = () => {
                 "latestKeys",
                 "licenseURL",
                 "manifestURL",
+                "panel_license",
+                "panel_license_info",
             ],
             (result) => {
+                // Load panel license info
+                if (result.panel_license) {
+                    setPanelLicense(result.panel_license);
+                }
+                if (result.panel_license_info) {
+                    setLicenseType(result.panel_license_info.license_type);
+                }
                 if (result.drmType) setDrmType(result.drmType || "");
                 if (result.latestPSSH) setPssh(result.latestPSSH || "");
                 if (result.licenseURL) setLicenseUrl(result.licenseURL || "");
@@ -71,11 +85,14 @@ const Results = () => {
                     setManifestUrl(changes.manifestURL.newValue || "");
                 }
                 if (changes.latestKeys) {
-                    setKeys(changes.latestKeys.newValue || []);
-                    if (changes.latestKeys.newValue && changes.latestKeys.newValue.length > 0) {
+                    const newKeys = changes.latestKeys.newValue || [];
+                    setKeys(newKeys);
+                    if (newKeys && newKeys.length > 0) {
                         toast.success("Keys extracted successfully!", {
                             icon: <IoCheckmarkCircle className="text-success" />,
                         });
+                        // Auto-sync to panel if license is active
+                        syncKeysToPanel(newKeys);
                     }
                 }
             }
@@ -220,9 +237,72 @@ const Results = () => {
         });
     };
 
+    // Sync keys to KeyScopeX Panel
+    const syncKeysToPanel = async (keysToSync) => {
+        if (!panelLicense || !autoSyncEnabled) {
+            return; // No license or auto-sync disabled
+        }
+
+        if (!keysToSync || keysToSync.length === 0) {
+            return;
+        }
+
+        try {
+            const response = await fetch('https://keyscopex.xproject.live/panel/backend/api/keys.php?action=submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-License-Key': panelLicense,
+                    'X-Extension-Version': '1.0.0'
+                },
+                body: JSON.stringify({
+                    license_key: panelLicense,
+                    drm_type: drmType,
+                    pssh: pssh,
+                    keys: keysToSync.map(k => ({
+                        key_id: k.key_id || k.keyId,
+                        key: k.key
+                    })),
+                    license_url: licenseUrl,
+                    manifest_url: manifestUrl,
+                    content_url: currentTabUrl
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                toast.success(`✅ Synced ${data.keys_saved} key(s) to Panel!`, {
+                    icon: <IoCloudUploadOutline className="text-success" />,
+                });
+            } else {
+                console.warn('Panel sync failed:', data.message);
+            }
+        } catch (error) {
+            console.error('Panel sync error:', error);
+            // Silent fail - don't interrupt user workflow
+        }
+    };
+
     return (
         <div className="flex h-full w-full flex-col gap-4">
             <InjectionMenu />
+            
+            {/* Panel Status */}
+            {panelLicense && licenseType && (
+                <div className="alert bg-primary/20 border-primary/50">
+                    <IoCloudUploadOutline className="h-5 w-5 text-primary" />
+                    <div className="flex flex-col flex-1">
+                        <span className="font-semibold text-primary">Panel Connected</span>
+                        <span className="text-xs text-base-content/70">
+                            {licenseType} License • Auto-sync enabled
+                        </span>
+                    </div>
+                    <a href="https://keyscopex.xproject.live/panel/user/" target="_blank" className="btn btn-xs btn-primary">
+                        View Dashboard
+                    </a>
+                </div>
+            )}
             
             <button 
                 onClick={handleCapture} 

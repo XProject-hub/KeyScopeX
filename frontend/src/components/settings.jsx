@@ -8,11 +8,17 @@ const Settings = ({ onConfigSaved }) => {
     const [storedUrl, setStoredUrl] = useState(null);
     const [loading, setLoading] = useState(false);
     const [deviceInfo, setDeviceInfo] = useState(null);
+    
+    // Panel License Integration
+    const [panelLicense, setPanelLicense] = useState("");
+    const [storedLicense, setStoredLicense] = useState(null);
+    const [licenseInfo, setLicenseInfo] = useState(null);
+    const [licenseLoading, setLicenseLoading] = useState(false);
 
     const navigate = useNavigate();
 
     useEffect(() => {
-        chrome.storage.local.get(["cdrm_instance", "widevine_device", "playready_device"], (result) => {
+        chrome.storage.local.get(["cdrm_instance", "widevine_device", "playready_device", "panel_license", "panel_license_info"], (result) => {
             if (chrome.runtime.lastError) {
                 toast.error("Error fetching CDRM instance:", chrome.runtime.lastError);
                 console.error("Error fetching CDRM instance:", chrome.runtime.lastError);
@@ -25,6 +31,12 @@ const Settings = ({ onConfigSaved }) => {
                         widevine: result.widevine_device,
                         playready: result.playready_device,
                     });
+                }
+                if (result.panel_license) {
+                    setStoredLicense(result.panel_license);
+                }
+                if (result.panel_license_info) {
+                    setLicenseInfo(result.panel_license_info);
                 }
             }
         });
@@ -131,6 +143,67 @@ const Settings = ({ onConfigSaved }) => {
         }
     };
 
+    const handleLicenseValidation = async () => {
+        const trimmedLicense = panelLicense.trim();
+        if (!trimmedLicense) {
+            toast.error("Please enter your license key");
+            return;
+        }
+
+        setLicenseLoading(true);
+
+        try {
+            const response = await fetch('https://keyscopex.xproject.live/panel/backend/api/license.php?action=check', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ license_key: trimmedLicense })
+            });
+
+            const data = await response.json();
+
+            if (data.valid) {
+                const licenseData = {
+                    license_key: trimmedLicense,
+                    license_type: data.license_type,
+                    user: data.user,
+                    expires: data.expires
+                };
+
+                chrome.storage.local.set(
+                    {
+                        panel_license: trimmedLicense,
+                        panel_license_info: licenseData
+                    },
+                    () => {
+                        if (chrome.runtime.lastError) {
+                            toast.error("Error saving license");
+                        } else {
+                            setStoredLicense(trimmedLicense);
+                            setLicenseInfo(licenseData);
+                            setPanelLicense("");
+                            toast.success(`License activated! Type: ${data.license_type}`, {
+                                icon: <IoCheckmarkCircle className="text-success" />,
+                            });
+                        }
+                    }
+                );
+            } else {
+                toast.error(data.message || "Invalid license key", {
+                    icon: <IoWarning className="text-error" />,
+                });
+            }
+        } catch (err) {
+            console.error("License validation error:", err);
+            toast.error("Failed to validate license. Check your connection.", {
+                icon: <IoWarning className="text-error" />,
+            });
+        } finally {
+            setLicenseLoading(false);
+        }
+    };
+
     return (
         <div className="flex h-full w-full flex-col gap-4">
             {/* Current Configuration Status */}
@@ -220,6 +293,73 @@ const Settings = ({ onConfigSaved }) => {
                     <>
                         <IoSaveOutline className="h-5 w-5" />
                         {storedUrl ? "Update Instance" : "Connect Instance"}
+                    </>
+                )}
+            </button>
+
+            {/* Panel License Integration */}
+            <div className="divider my-6"></div>
+            
+            {/* License Status */}
+            {storedLicense && licenseInfo ? (
+                <div className="alert bg-primary/20 border-primary/50">
+                    <IoCheckmarkCircle className="h-6 w-6 text-primary" />
+                    <div className="flex flex-col">
+                        <span className="font-semibold text-primary">Panel License Active</span>
+                        <span className="text-sm text-base-content">
+                            {licenseInfo.user.username} • {licenseInfo.license_type} License
+                        </span>
+                        <span className="text-xs font-mono text-base-content/60 mt-1">{storedLicense}</span>
+                    </div>
+                    <a href="https://keyscopex.xproject.live/panel/user/" target="_blank" className="btn btn-sm btn-primary">
+                        Open Dashboard
+                    </a>
+                </div>
+            ) : (
+                <div className="alert bg-warning/20 border-warning/50">
+                    <IoWarning className="h-6 w-6 text-warning" />
+                    <div className="flex flex-col">
+                        <span className="font-semibold text-warning">No Panel License</span>
+                        <span className="text-sm text-base-content">Connect to KeyScopeX Panel to auto-sync keys</span>
+                    </div>
+                </div>
+            )}
+
+            {/* License Configuration */}
+            <fieldset className="fieldset">
+                <legend className="fieldset-legend text-base">
+                    🔑 KeyScopeX Panel License
+                </legend>
+                <input
+                    type="text"
+                    value={panelLicense}
+                    onChange={(e) => setPanelLicense(e.target.value)}
+                    placeholder="KSX-xxxxxxxx-xxxxxxxx-xxxxxxxx"
+                    className="input w-full font-mono"
+                    disabled={licenseLoading}
+                />
+                <p className="label">
+                    <span className="label-text-alt text-base-content/60">
+                        Enter your license key from <a href="https://keyscopex.xproject.live/panel/public/register.php" target="_blank" className="text-primary underline">KeyScopeX Panel</a>
+                    </span>
+                </p>
+            </fieldset>
+
+            <button
+                type="button"
+                onClick={handleLicenseValidation}
+                disabled={licenseLoading || !panelLicense.trim()}
+                className="btn btn-primary btn-block"
+            >
+                {licenseLoading ? (
+                    <>
+                        <span className="loading loading-spinner loading-sm"></span> 
+                        Validating License...
+                    </>
+                ) : (
+                    <>
+                        <IoSaveOutline className="h-5 w-5" />
+                        {storedLicense ? "Update License" : "Activate License"}
                     </>
                 )}
             </button>
