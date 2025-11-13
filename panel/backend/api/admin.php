@@ -82,6 +82,11 @@ switch ($action) {
         getAdminLogs($_GET);
         break;
     
+    // Export
+    case 'export_all_keys':
+        exportAllKeys();
+        break;
+    
     default:
         jsonResponse(['success' => false, 'message' => 'Invalid action'], 400);
 }
@@ -796,6 +801,63 @@ function getAdminLogs($params) {
     }
 }
 
-// LineWatchX Project - Made with 🧡
+/**
+ * Export all keys as JSON
+ */
+function exportAllKeys() {
+    try {
+        $db = getDB();
+        
+        $stmt = $db->query("
+            SELECT 
+                dk.id,
+                dk.drm_type,
+                dk.pssh,
+                dk.key_id,
+                dk.key_value,
+                dk.license_url,
+                dk.manifest_url,
+                dk.content_title,
+                dk.content_url,
+                dk.captured_at,
+                u.username,
+                u.license_type
+            FROM drm_keys dk
+            JOIN users u ON dk.user_id = u.id
+            ORDER BY dk.captured_at DESC
+        ");
+        $keys = $stmt->fetchAll();
+        
+        $export = [
+            'exported_by' => 'Admin',
+            'exported_at' => date('Y-m-d H:i:s'),
+            'total_keys' => count($keys),
+            'format' => 'MPD_Link + KID:Key',
+            'keys' => array_map(function($key) {
+                return [
+                    'mpd_link' => $key['manifest_url'],
+                    'kid_key' => $key['key_id'] . ':' . $key['key_value'],
+                    'drm_type' => $key['drm_type'],
+                    'pssh' => $key['pssh'],
+                    'content_title' => $key['content_title'],
+                    'collected_by' => $key['username'],
+                    'license_type' => $key['license_type'],
+                    'captured_at' => $key['captured_at']
+                ];
+            }, $keys)
+        ];
+        
+        header('Content-Type: application/json');
+        header('Content-Disposition: attachment; filename="keyscopex-all-keys-' . date('Y-m-d-His') . '.json"');
+        echo json_encode($export, JSON_PRETTY_PRINT);
+        exit();
+        
+    } catch (PDOException $e) {
+        error_log("Export all keys error: " . $e->getMessage());
+        jsonResponse(['success' => false, 'message' => 'Error exporting keys'], 500);
+    }
+}
+
+// X Project - Developed by X Project | Version 1.0.1
 ?>
 
