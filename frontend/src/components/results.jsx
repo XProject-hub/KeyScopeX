@@ -3,6 +3,8 @@ import { IoCameraOutline, IoCopyOutline, IoSaveOutline, IoCheckmarkCircle, IoClo
 import { toast } from "sonner";
 import InjectionMenu from "./injectionmenu";
 
+const PANEL_URL = "https://keyscopex.xproject.live";
+
 const Results = () => {
     const [drmType, setDrmType] = useState("");
     const [pssh, setPssh] = useState("");
@@ -14,15 +16,13 @@ const Results = () => {
     
     // Panel integration
     const [panelLicense, setPanelLicense] = useState(null);
-    const [licenseType, setLicenseType] = useState(null);
-    const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
+    const [licenseInfo, setLicenseInfo] = useState(null);
 
     useEffect(() => {
         chrome.storage.local.get(
             [
                 "drmType",
                 "latestPSSH",
-                "latestLicenseRequest",
                 "latestKeys",
                 "licenseURL",
                 "manifestURL",
@@ -30,12 +30,11 @@ const Results = () => {
                 "panel_license_info",
             ],
             (result) => {
-                // Load panel license info
                 if (result.panel_license) {
                     setPanelLicense(result.panel_license);
                 }
                 if (result.panel_license_info) {
-                    setLicenseType(result.panel_license_info.license_type);
+                    setLicenseInfo(result.panel_license_info);
                 }
                 if (result.drmType) setDrmType(result.drmType || "");
                 if (result.latestPSSH) setPssh(result.latestPSSH || "");
@@ -55,7 +54,6 @@ const Results = () => {
             }
         );
 
-        // Get current tab URL when component mounts
         chrome.windows.getAll({ populate: true, windowTypes: ["normal"] }, (windows) => {
             if (windows && windows.length > 0) {
                 const lastFocusedWindow = windows.find((w) => w.focused) || windows[0];
@@ -88,10 +86,7 @@ const Results = () => {
                     const newKeys = changes.latestKeys.newValue || [];
                     setKeys(newKeys);
                     if (newKeys && newKeys.length > 0) {
-                        toast.success("Keys extracted successfully!", {
-                            icon: <IoCheckmarkCircle className="text-success" />,
-                        });
-                        // Auto-sync to panel if license is active
+                        toast.success("Keys extracted successfully");
                         syncKeysToPanel(newKeys);
                     }
                 }
@@ -100,12 +95,11 @@ const Results = () => {
 
         chrome.storage.onChanged.addListener(handleChange);
         return () => chrome.storage.onChanged.removeListener(handleChange);
-    }, []);
+    }, [panelLicense, drmType, pssh, licenseUrl, manifestUrl, currentTabUrl]);
 
     const handleCapture = () => {
         setIsCapturing(true);
         
-        // Reset stored values
         chrome.storage.local.set({
             drmType: "",
             latestPSSH: "",
@@ -114,31 +108,25 @@ const Results = () => {
             latestKeys: [],
         });
 
-        // Show capturing toast
         toast.loading("Capturing DRM data from current tab...", { id: "capture-toast" });
 
-        // Get all normal windows to exclude your popup
         chrome.windows.getAll({ populate: true, windowTypes: ["normal"] }, (windows) => {
             if (!windows || windows.length === 0) {
-                console.warn("No normal Chrome windows found");
                 toast.dismiss("capture-toast");
                 toast.error("No browser windows found");
                 setIsCapturing(false);
                 return;
             }
 
-            // Find the last focused normal window
             const lastFocusedWindow = windows.find((w) => w.focused) || windows[0];
 
             if (!lastFocusedWindow) {
-                console.warn("No focused normal window found");
                 toast.dismiss("capture-toast");
                 toast.error("No active window found");
                 setIsCapturing(false);
                 return;
             }
 
-            // Find the active tab in that window (that is a regular webpage)
             const activeTab = lastFocusedWindow.tabs.find(
                 (tab) => tab.active && tab.url && /^https?:\/\//.test(tab.url)
             );
@@ -146,20 +134,18 @@ const Results = () => {
             if (activeTab?.id) {
                 chrome.tabs.reload(activeTab.id, () => {
                     if (chrome.runtime.lastError) {
-                        console.error("Failed to reload tab:", chrome.runtime.lastError);
                         toast.dismiss("capture-toast");
                         toast.error("Failed to reload tab");
                         setIsCapturing(false);
                     } else {
                         setTimeout(() => {
                             toast.dismiss("capture-toast");
-                            toast.info("Page reloaded. Play the video to capture DRM keys.");
+                            toast.info("Page reloaded. Play the video to capture keys");
                             setIsCapturing(false);
                         }, 1000);
                     }
                 });
             } else {
-                console.warn("No active tab found in the last focused normal window");
                 toast.dismiss("capture-toast");
                 toast.error("No active webpage found");
                 setIsCapturing(false);
@@ -167,93 +153,18 @@ const Results = () => {
         });
     };
 
-    const handleCopyToClipboard = (text, label) => {
-        navigator.clipboard.writeText(text);
-        toast.success(`Copied ${label} to clipboard`, {
-            icon: <IoCopyOutline className="text-info" />,
-        });
-    };
-
-    // Check if current tab is YouTube
-    const isYouTube = () => {
-        return currentTabUrl.includes("youtube.com") || currentTabUrl.includes("youtu.be");
-    };
-
-    // Get manifest URL display value
-    const getManifestDisplayValue = () => {
-        if (manifestUrl) {
-            return manifestUrl;
-        }
-        if (isYouTube()) {
-            return "[Use yt-dlp to download video]";
-        }
-        return "";
-    };
-
-    // Get manifest URL placeholder
-    const getManifestPlaceholder = () => {
-        if (isYouTube() && !manifestUrl) {
-            return "[Use yt-dlp to download video]";
-        }
-        return "[Not available]";
-    };
-
-    // Export to JSON file
-    const hasData = () => {
-        return Array.isArray(keys) && keys.filter((k) => k.type !== "SIGNING").length > 0;
-    };
-
-    const handleExportJSON = () => {
-        const exportData = {
-            drmType: drmType || null,
-            manifestUrl: manifestUrl || null,
-            pssh: pssh || null,
-            licenseUrl: licenseUrl || null,
-            keys:
-                Array.isArray(keys) && keys.length > 0
-                    ? keys
-                          .filter((k) => k.type !== "SIGNING")
-                          .map((k) => `${k.key_id || k.keyId}:${k.key}`)
-                    : null,
-            exportedAt: new Date().toISOString(),
-            exportedBy: "KeyScopeX - LineWatchX Project",
-        };
-
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-            type: "application/json",
-        });
-
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `keyscopex-drm-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        toast.success("DRM data exported successfully!", {
-            icon: <IoSaveOutline className="text-success" />,
-        });
-    };
-
-    // Sync keys to KeyScopeX Panel
     const syncKeysToPanel = async (keysToSync) => {
-        if (!panelLicense || !autoSyncEnabled) {
-            return; // No license or auto-sync disabled
-        }
-
-        if (!keysToSync || keysToSync.length === 0) {
+        if (!panelLicense || !keysToSync || keysToSync.length === 0) {
             return;
         }
 
         try {
-            const response = await fetch('https://keyscopex.xproject.live/panel/backend/api/keys.php?action=submit', {
+            const response = await fetch(`${PANEL_URL}/panel/backend/api/keys.php?action=submit`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-License-Key': panelLicense,
-                    'X-Extension-Version': '1.0.0'
+                    'X-Extension-Version': '1.0.1'
                 },
                 body: JSON.stringify({
                     license_key: panelLicense,
@@ -272,41 +183,96 @@ const Results = () => {
             const data = await response.json();
 
             if (data.success) {
-                toast.success(`✅ Synced ${data.keys_saved} key(s) to Panel!`, {
-                    icon: <IoCloudUploadOutline className="text-success" />,
-                });
-            } else {
-                console.warn('Panel sync failed:', data.message);
+                toast.success(`Synced ${data.keys_saved} key(s) to Panel`);
             }
         } catch (error) {
             console.error('Panel sync error:', error);
-            // Silent fail - don't interrupt user workflow
         }
+    };
+
+    const handleCopyToClipboard = (text, label) => {
+        navigator.clipboard.writeText(text);
+        toast.success(`Copied ${label} to clipboard`);
+    };
+
+    const isYouTube = () => {
+        return currentTabUrl.includes("youtube.com") || currentTabUrl.includes("youtu.be");
+    };
+
+    const getManifestDisplayValue = () => {
+        if (manifestUrl) return manifestUrl;
+        if (isYouTube()) return "[Use yt-dlp to download video]";
+        return "";
+    };
+
+    const getManifestPlaceholder = () => {
+        if (isYouTube() && !manifestUrl) {
+            return "[Use yt-dlp to download video]";
+        }
+        return "[Not available]";
+    };
+
+    const hasData = () => {
+        return Array.isArray(keys) && keys.filter((k) => k.type !== "SIGNING").length > 0;
+    };
+
+    const handleExportJSON = () => {
+        const exportData = {
+            drmType: drmType || null,
+            manifestUrl: manifestUrl || null,
+            pssh: pssh || null,
+            licenseUrl: licenseUrl || null,
+            keys:
+                Array.isArray(keys) && keys.length > 0
+                    ? keys
+                          .filter((k) => k.type !== "SIGNING")
+                          .map((k) => `${k.key_id || k.keyId}:${k.key}`)
+                    : null,
+            exportedAt: new Date().toISOString(),
+            exportedBy: "KeyScopeX - X Project",
+        };
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+            type: "application/json",
+        });
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `keyscopex-drm-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        toast.success("DRM data exported successfully");
     };
 
     return (
         <div className="flex h-full w-full flex-col gap-4">
             <InjectionMenu />
             
-            {/* Panel Status */}
-            {panelLicense && licenseType && (
+            {/* Panel Connection Status */}
+            {panelLicense && licenseInfo && (
                 <div className="alert bg-primary/20 border-primary/50">
                     <IoCloudUploadOutline className="h-5 w-5 text-primary" />
                     <div className="flex flex-col flex-1">
-                        <span className="font-semibold text-primary">Panel Connected</span>
+                        <span className="font-semibold text-primary">
+                            Connected: {licenseInfo.user.username}
+                        </span>
                         <span className="text-xs text-base-content/70">
-                            {licenseType} License • Auto-sync enabled
+                            {licenseInfo.license_type} License - Auto-sync enabled
                         </span>
                     </div>
-                    <a href="https://keyscopex.xproject.live/panel/user/" target="_blank" className="btn btn-xs btn-primary">
-                        View Dashboard
+                    <a href={`${PANEL_URL}/panel/user/`} target="_blank" className="btn btn-xs btn-primary">
+                        Dashboard
                     </a>
                 </div>
             )}
             
             <button 
                 onClick={handleCapture} 
-                className="btn btn-primary pulse-orange"
+                className="btn btn-primary"
                 disabled={isCapturing}
             >
                 {isCapturing ? (
@@ -322,34 +288,29 @@ const Results = () => {
                 )}
             </button>
 
-            {/* Status Indicator */}
             {hasData() && (
                 <div className="alert bg-success/20 border-success/50">
                     <IoCheckmarkCircle className="h-6 w-6 text-success" />
-                    <span className="text-success font-semibold">DRM Keys Successfully Extracted!</span>
+                    <span className="text-success font-semibold">Keys Extracted Successfully</span>
                 </div>
             )}
 
             <fieldset className="fieldset">
-                <legend className="fieldset-legend text-base">
-                    <span className="status-indicator status-online"></span>
-                    DRM Type
-                </legend>
+                <legend className="fieldset-legend text-sm">DRM Type</legend>
                 <input
                     type="text"
                     value={drmType || "[Waiting for capture...]"}
-                    className="input w-full font-mono"
-                    placeholder="[Not available]"
+                    className="input w-full font-mono text-sm"
                     disabled
                 />
             </fieldset>
 
             <fieldset className="fieldset">
-                <legend className="fieldset-legend text-base">Manifest URL</legend>
+                <legend className="fieldset-legend text-sm">Manifest URL (MPD Link)</legend>
                 <input
                     type="text"
                     value={getManifestDisplayValue()}
-                    className={`input w-full font-mono ${
+                    className={`input w-full font-mono text-sm ${
                         isYouTube() && !manifestUrl ? "text-warning" : ""
                     }`}
                     placeholder={getManifestPlaceholder()}
@@ -361,19 +322,19 @@ const Results = () => {
                             className="btn btn-link btn-sm text-info"
                             onClick={() => handleCopyToClipboard(manifestUrl, "manifest URL")}
                         >
-                            <IoCopyOutline className="h-5 w-5" />
-                            Copy Manifest URL
+                            <IoCopyOutline className="h-4 w-4" />
+                            Copy MPD Link
                         </button>
                     </p>
                 )}
             </fieldset>
 
             <fieldset className="fieldset">
-                <legend className="fieldset-legend text-base">PSSH (Protection System Specific Header)</legend>
+                <legend className="fieldset-legend text-sm">PSSH</legend>
                 <input
                     type="text"
                     value={pssh}
-                    className="input w-full font-mono text-sm"
+                    className="input w-full font-mono text-xs"
                     placeholder="[Not available]"
                     disabled
                 />
@@ -383,7 +344,7 @@ const Results = () => {
                             className="btn btn-link btn-sm text-info"
                             onClick={() => handleCopyToClipboard(pssh, "PSSH")}
                         >
-                            <IoCopyOutline className="h-5 w-5" />
+                            <IoCopyOutline className="h-4 w-4" />
                             Copy PSSH
                         </button>
                     </p>
@@ -391,11 +352,11 @@ const Results = () => {
             </fieldset>
 
             <fieldset className="fieldset">
-                <legend className="fieldset-legend text-base">License URL</legend>
+                <legend className="fieldset-legend text-sm">License URL</legend>
                 <input
                     type="text"
                     value={licenseUrl}
-                    className="input w-full font-mono text-sm"
+                    className="input w-full font-mono text-xs"
                     placeholder="[Not available]"
                     disabled
                 />
@@ -405,7 +366,7 @@ const Results = () => {
                             className="btn btn-link btn-sm text-info"
                             onClick={() => handleCopyToClipboard(licenseUrl, "license URL")}
                         >
-                            <IoCopyOutline className="h-5 w-5" />
+                            <IoCopyOutline className="h-4 w-4" />
                             Copy License URL
                         </button>
                     </p>
@@ -413,11 +374,11 @@ const Results = () => {
             </fieldset>
 
             <fieldset className="fieldset">
-                <legend className="fieldset-legend text-base">
-                    Decryption Keys 
+                <legend className="fieldset-legend text-sm">
+                    Decryption Keys (KID:Key)
                     {hasData() && (
                         <span className="ml-2 badge badge-success badge-sm">
-                            {keys.filter((k) => k.type !== "SIGNING").length} keys found
+                            {keys.filter((k) => k.type !== "SIGNING").length} keys
                         </span>
                     )}
                 </legend>
@@ -430,7 +391,7 @@ const Results = () => {
                                   .join("\n")
                             : "[Keys will appear here after capture...]"
                     }
-                    className="textarea w-full font-mono text-sm"
+                    className="textarea w-full font-mono text-xs"
                     rows="6"
                     disabled
                 />
@@ -450,7 +411,7 @@ const Results = () => {
                                     )
                                 }
                             >
-                                <IoCopyOutline className="h-5 w-5" />
+                                <IoCopyOutline className="h-4 w-4" />
                                 Copy All Keys
                             </button>
                         </p>
@@ -458,7 +419,7 @@ const Results = () => {
             </fieldset>
 
             {hasData() && (
-                <button onClick={handleExportJSON} className="btn btn-success glow-orange">
+                <button onClick={handleExportJSON} className="btn btn-success">
                     <IoSaveOutline className="h-5 w-5" />
                     Export as JSON
                 </button>

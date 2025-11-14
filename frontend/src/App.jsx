@@ -51,9 +51,12 @@ const App = () => {
                 <div className="ksx-header">
                     <img 
                         src={keyScopeXLogo} 
-                        alt="KeyScopeX Logo" 
+                        alt="KeyScopeX" 
                         className="ksx-logo"
                     />
+                    <h2 style={{color: '#a0aec0', fontSize: '0.875rem', marginTop: '0.5rem'}}>
+                        DRM Key Extractor
+                    </h2>
                 </div>
 
                 <Container>
